@@ -30,11 +30,3 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   );
 }
 
-async function waitForPortOne() {
-  const begin = Date.now();
-  while (!window.PortOne?.requestPayment) {
-    if (Date.now() - begin > 5000) throw new Error("PortOne SDK load timeout");
-    await new Promise(r => setTimeout(r, 50));
-  }
-  return window.PortOne;
-}

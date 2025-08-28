@@ -1,8 +1,7 @@
 // lib/portone/client.ts
 'use client';
 
-// 브라우저에서만 import!
-// layout.tsx 에서 SDK 로드 필요:
+// PortOne v2 브라우저 SDK는 레이아웃에서 로드되어야 합니다.
 // <Script src="https://cdn.portone.io/v2/browser-sdk.js" strategy="afterInteractive" />
 
 declare global {
@@ -14,7 +13,7 @@ declare global {
 type Sdk = { requestPayment: (payload: any) => Promise<any> };
 
 function getPortOne(): Sdk {
-  // 전역에서 SDK 안전히 조회
+  // 전역에서 SDK 안전 추출
   const sdk = (globalThis as any)?.PortOne;
   if (!sdk || typeof sdk.requestPayment !== 'function') {
     throw new Error('PortOne SDK not loaded');
@@ -26,31 +25,46 @@ export type CheckoutPayloadBase = {
   paymentId: string;
   orderName: string;
   totalAmount: number;
-  currency: string;          // 'KRW'
+  currency: string;              // 'KRW'
   payMethod: 'CARD' | string;
-  redirectUrl: string;
+  redirectUrl?: string;          // 비워도 아래에서 보강
   env?: 'sandbox' | 'production' | 'development';
-  customer?: { customerId?: string; fullName?: string; email?: string; phoneNumber?: string };
+  customer?: {
+    customerId?: string;
+    fullName?: string;
+    email?: string;
+    phoneNumber?: string;
+  };
 };
 
+// 브라우저 호출 입력
 export type CheckoutInput = CheckoutPayloadBase & {
-  storeId?: string;      // 없으면 env에서 보강
-  channelKey?: string;   // 선택 (기본 채널 없으면 필수)
+  storeId?: string;              // 없으면 ENV에서 보강
+  channelKey?: string;           // 기본 채널 없으면 필수
 };
 
 export async function requestPortOnePayment(input: CheckoutInput) {
   const sdk = getPortOne();
 
-  const storeId     = input.storeId    ?? process.env.NEXT_PUBLIC_PORTONE_STORE_ID!;
-  const channelKey  = input.channelKey ?? process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY;
-  const redirectUrl = input.redirectUrl ?? process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL!;
-  const env = (input.env ?? (process.env.NEXT_PUBLIC_PORTONE_ENV as any) ?? 'sandbox') as
-    | 'sandbox' | 'production' | 'development';
+  const storeId    = input.storeId    ?? process.env.NEXT_PUBLIC_PORTONE_STORE_ID!;
+  const channelKey = input.channelKey ?? process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY ?? undefined;
 
-  if (!storeId) throw new Error('storeId missing');
+  // 브라우저에서 현재 도메인으로 폴백
+  const runtimeOrigin = (globalThis as any)?.location?.origin || '';
+
+  const redirectUrl =
+    input.redirectUrl
+    ?? process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL
+    ?? (runtimeOrigin ? `${runtimeOrigin}/checkout/complete` : '');
+
+  const env =
+    (input.env ?? (process.env.NEXT_PUBLIC_PORTONE_ENV as any) ?? 'sandbox') as
+      | 'sandbox' | 'production' | 'development';
+
+  if (!storeId)    throw new Error('storeId missing');
   if (!redirectUrl) throw new Error('redirectUrl missing');
 
-  // ✅ 절대 { data: ... }로 감싸지 말 것!
+  // ✅ 절대 { data: {...} }로 래핑하지 말 것 — 최상위에 storeId 유지
   const payload = {
     storeId,
     ...(channelKey ? { channelKey } : {}),
@@ -64,7 +78,7 @@ export async function requestPortOnePayment(input: CheckoutInput) {
     ...(input.customer ? { customer: input.customer } : {}),
   };
 
-  // 디버그용
+  // 디버그
   // eslint-disable-next-line no-console
   console.log('[PortOne payload]', payload);
 
