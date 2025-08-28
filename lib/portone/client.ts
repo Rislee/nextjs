@@ -64,7 +64,6 @@ export async function requestPortOnePayment(input: CheckoutInput) {
   if (!storeId)    throw new Error('storeId missing');
   if (!redirectUrl) throw new Error('redirectUrl missing');
 
-  // ✅ 절대 { data: {...} }로 래핑하지 말 것 — 최상위에 storeId 유지
   const payload = {
     storeId,
     ...(channelKey ? { channelKey } : {}),

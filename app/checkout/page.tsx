@@ -57,8 +57,8 @@ export default function CheckoutPage() {
         totalAmount: amount,
         currency:    currency || 'KRW',
         payMethod:   'CARD',
-        redirectUrl: '',            // 비워도 client 래퍼가 env에서 보강
-        // customer: { customerId: '원하면추가' } // 선택
+        //redirectUrl: '',
+        // customer: { customerId: '원하면추가' }
       });
 
       // 이후 PortOne이 redirectUrl로 이동합니다.
