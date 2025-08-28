@@ -82,4 +82,34 @@ export async function requestPortOnePayment(input: CheckoutInput) {
   console.log('[PortOne payload]', payload);
 
   return sdk.requestPayment(payload);
+
+    // SDK 호출
+  const res: any = await sdk.requestPayment(payload);
+
+  // ✅ PC(iframe/popup)에서 자동 리디렉션이 없는 경우를 대비해 수동 이동
+  try {
+    if (typeof window !== 'undefined' && redirectUrl) {
+      // REDIRECTION 모드면 콜백이 안 오므로(res undefined) 이 블록이 실행되지 않음
+      if (res) {
+        const qs = new URLSearchParams({ paymentId: input.paymentId });
+
+        // 성공/실패 힌트 (SDK 응답 형태는 PG/모듈에 따라 code/message 유무가 다름)
+        if (res.code) {
+          qs.set('success', 'false');
+          qs.set('code', String(res.code));
+          if (res.message) qs.set('message', String(res.message));
+        } else {
+          qs.set('success', 'true');
+          if (res.txId) qs.set('txId', String(res.txId));
+        }
+
+        window.location.assign(`${redirectUrl}?${qs.toString()}`);
+      }
+    }
+  } catch (e) {
+    console.error('[PortOne redirect fallback error]', e);
+  }
+
+  return res;
 }
+
