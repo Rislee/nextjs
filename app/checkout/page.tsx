@@ -57,7 +57,7 @@ export default function CheckoutPage() {
         totalAmount: amount,
         currency:    currency || 'KRW',
         payMethod:   'CARD',
-        //redirectUrl: '',
+        redirectUrl: 'https://account.inneros.co.kr/checkout/complete',
         // customer: { customerId: '원하면추가' }
       });
 
