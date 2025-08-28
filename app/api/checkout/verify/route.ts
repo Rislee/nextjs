@@ -1,43 +1,62 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getPayment } from '@/lib/portone/server'; // 앞서 만든 server.ts
+import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { supabaseAdmin } from "@/lib/supabaseAdmin";
+import { getPayment } from "@/lib/portone";
+
+type PlanId = "START_OS" | "SIGNATURE_OS" | "MASTER_OS";
+
+const PRICE: Record<PlanId, number> = {
+  START_OS: 5_500_000,
+  SIGNATURE_OS: 9_900_000,
+  MASTER_OS: 19_900_000,
+};
+
+function parsePlan(paymentId: string): PlanId | null {
+  const m = paymentId.match(/inneros_(START_OS|SIGNATURE_OS|MASTER_OS)_/);
+  return (m?.[1] as PlanId) || null;
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const { paymentId } = await req.json();
-    if (!paymentId) return NextResponse.json({ ok:false, error:'missing paymentId' }, { status:400 });
+    const { paymentId } = (await req.json()) as { paymentId?: string };
+    if (!paymentId) {
+      return NextResponse.json({ ok: false, error: "missing paymentId" }, { status: 400 });
+    }
 
+    const plan = parsePlan(paymentId);
+    if (!plan) {
+      return NextResponse.json({ ok: false, error: "invalid paymentId format" }, { status: 400 });
+    }
+
+    const jar: any = (cookies as any)();
+    const uid = jar?.get?.("uid")?.value;
+    if (!uid) {
+      return NextResponse.json({ ok: false, error: "no uid cookie" }, { status: 401 });
+    }
+
+    // PortOne 단건 조회
     const pay = await getPayment(paymentId);
-    // 예: 상태/금액 검증
-    if (pay.status !== 'PAID') return NextResponse.json({ ok:false, error:`status ${pay.status}` }, { status:400 });
 
-    // 주문 조회
-    const { data: order } = await supabaseAdmin
-      .from('orders')
-      .select('id,user_id,plan_id,amount,currency,status')
-      .eq('merchant_uid', paymentId)
-      .maybeSingle();
+    const isPaid = (pay.status || "").toUpperCase() === "PAID";
+    const amountOK = Number(pay.amount) === PRICE[plan];
 
-    if (!order) return NextResponse.json({ ok:false, error:'order not found' }, { status:404 });
-    if (order.amount !== pay.amount || order.currency !== pay.currency)
-      return NextResponse.json({ ok:false, error:'amount/currency mismatch' }, { status:400 });
+    if (!isPaid || !amountOK) {
+      return NextResponse.json({ ok: false, error: `not paid or amount mismatch` }, { status: 400 });
+    }
 
-    // 주문 결제완료
-    await supabaseAdmin.from('orders')
-      .update({ status:'paid' })
-      .eq('id', order.id);
+    // 멤버십 활성화 (존재한다고 했던 memberships 테이블)
+    const next = new Date();
+    next.setMonth(next.getMonth() + 1);
 
-    // 멤버십 활성화
-    await supabaseAdmin.from('memberships')
-      .upsert({
-        user_id: order.user_id,
-        plan: order.plan_id,
-        status: 'active',
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+    await supabaseAdmin.from("memberships").upsert({
+      user_id: uid,
+      plan_id: plan,
+      status: "active",
+      current_period_end: next.toISOString(),
+    }, { onConflict: "user_id" } as any);
 
-    return NextResponse.json({ ok:true });
-  } catch (e:any) {
-    return NextResponse.json({ ok:false, error:e?.message ?? 'unknown' }, { status:500 });
+    return NextResponse.json({ ok: true });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || "verify failed" }, { status: 500 });
   }
 }

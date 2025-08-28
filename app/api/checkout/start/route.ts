@@ -1,69 +1,45 @@
-// app/api/checkout/start/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
+type PlanId = "START_OS" | "SIGNATURE_OS" | "MASTER_OS";
+
+// 서버에서 신뢰하는 금액/이름 매핑 (원하면 Supabase 테이블로 대체)
+const PLAN: Record<PlanId, { name: string; price: number }> = {
+  START_OS: { name: "InnerOS Start OS",      price: 5_500_000 },
+  SIGNATURE_OS: { name: "InnerOS Signature OS", price: 9_900_000 },
+  MASTER_OS: { name: "InnerOS Master OS",     price: 19_900_000 },
+};
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const { planId } = body as { planId?: string };
-    if (!planId) {
-      return NextResponse.json({ ok: false, error: "missing planId" }, { status: 400 });
+    const { planId } = (await req.json()) as { planId?: PlanId };
+    if (!planId || !PLAN[planId]) {
+      return NextResponse.json({ ok: false, error: "invalid planId" }, { status: 400 });
     }
 
-    // 👇 Next 15 타입에서 cookies()가 Promise로 보일 수 있으므로 await
-    const cookieStore = await cookies();
-    const uid = cookieStore.get("uid")?.value;
+    // uid HttpOnly 쿠키 확인 (로그인 필요)
+    const jar: any = (cookies as any)();
+    const uid = jar?.get?.("uid")?.value;
     if (!uid) {
-      return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+      return NextResponse.json({ ok: false, error: "no uid cookie (login required)" }, { status: 401 });
     }
 
-    // plans 테이블에서 금액/통화/이름 조회
-    const { data: plan, error: planErr } = await supabaseAdmin
-      .from("plans")
-      .select("id,name,price,currency")
-      .eq("id", planId)
-      .maybeSingle();
-
-    if (planErr) return NextResponse.json({ ok: false, error: planErr.message }, { status: 500 });
-    if (!plan)  return NextResponse.json({ ok: false, error: "invalid plan" }, { status: 400 });
-
+    // 결제ID(merchantUid) 생성: planId를 박아두면 webhook/검증에서 파싱 가능
     const merchantUid = `inneros_${planId}_${Date.now()}`;
 
-    const { error: insErr } = await supabaseAdmin.from("orders").insert({
-      user_id: uid,
-      plan_id: plan.id,
-      merchant_uid: merchantUid,
-      amount: plan.price,
-      currency: plan.currency,
-      status: "pending",
-    });
-    if (insErr) return NextResponse.json({ ok: false, error: insErr.message }, { status: 500 });
+    const { name, price } = PLAN[planId];
+
+    // 여기서 DB에 orders/payments를 기록하고 싶다면 추가 (테이블 없으면 생략)
+    // ex) await supabaseAdmin.from("orders").insert({ user_id: uid, plan_id: planId, merchant_uid: merchantUid, amount: price })
 
     return NextResponse.json({
       ok: true,
       merchantUid,
-      amount: plan.price,
-      currency: plan.currency,
-      orderName: `InnerOS ${plan.name}`,
+      orderName: name,
+      amount: price,
+      currency: "KRW",
     });
   } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: e?.message || "start failed" }, { status: 500 });
   }
-}
-
-export async function OPTIONS() {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "Access-Control-Allow-Origin": "https://www.inneros.co.kr",
-      "Access-Control-Allow-Credentials": "true",
-      "Access-Control-Allow-Headers": "content-type",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      Vary: "Origin",
-    },
-  });
 }
