@@ -3,9 +3,9 @@
 
 export type PortonePayment = {
   id: string;
-  status: string;   // e.g. "PAID"
+  status: string;
   amount: number;
-  currency: string; // e.g. "KRW"
+  currency: string;
   merchant: { id?: string };
   orderName?: string;
 };

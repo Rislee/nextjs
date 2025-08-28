@@ -20,14 +20,13 @@ export default function CheckoutPage() {
     const res = await fetch('/api/checkout/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',               // 🔒 uid 쿠키 포함
+      credentials: 'include', // 🔒 uid 쿠키 포함
       body: JSON.stringify({ planId }),
     });
 
-    // 실패 응답도 내용 확인 (빈 바디 방지)
     const raw = await res.text();
     let json: any = null;
-    try { json = raw ? JSON.parse(raw) : null; } catch { /* ignore */ }
+    try { json = raw ? JSON.parse(raw) : null; } catch {}
 
     if (!res.ok || !json?.ok) {
       const err = json?.error ?? `start ${res.status}${raw ? `: ${raw}` : ''}`;
@@ -47,28 +46,31 @@ export default function CheckoutPage() {
       setLoading(planId);
       setMsg('');
 
-      // 1) 주문 생성(서버가 쿠키 uid로 사용자 식별)
+      // 0) 세션 쿠키 보강(로그인 직후 안전망)
+      await fetch('/api/session/ensure', { method: 'POST', credentials: 'include' }).catch(() => {});
+
+      // 1) 서버에서 주문 생성
       const { merchantUid, amount, currency, orderName } = await startOrder(planId);
 
-      // 2) PortOne 브라우저 SDK 호출 (클라이언트 래퍼)
+      // 2) PortOne 브라우저 SDK 호출 (명시적 전달)
       await requestPortOnePayment({
+        planId,
         paymentId:   merchantUid,
         orderName:   orderName,
-        totalAmount: amount,
-        currency:    currency || 'KRW',
-        payMethod:   'CARD',
+        amount:      amount,                // ✅ RequestArgs.amount (totalAmount 아님)
+        currency:    (currency ?? 'KRW'),
         redirectUrl: 'https://account.inneros.co.kr/checkout/complete',
-        // customer: { customerId: '원하면추가' }
+        env:         (process.env.NEXT_PUBLIC_PORTONE_ENV as 'sandbox' | 'production') || 'sandbox',
+        storeId:     process.env.NEXT_PUBLIC_PORTONE_STORE_ID!,                // ✅ 명시
+        channelKey:  process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY || undefined, // (기본 채널 없으면 필수)
       });
 
-      // 이후 PortOne이 redirectUrl로 이동합니다.
+      // 이후 REDIRECTION or 폴백 리다이렉션으로 완료 페이지 이동
     } catch (e: any) {
       console.error(e);
       setMsg(e?.message ?? String(e));
-      // 401이면 로그인 만료 가능성 → 사인인으로 유도
       if (String(e?.message || '').includes('unauthorized')) {
         setMsg('로그인이 필요합니다. 다시 로그인 해주세요.');
-        // location.href = 'https://account.inneros.co.kr/auth/sign-in';
       }
     } finally {
       setLoading(null);

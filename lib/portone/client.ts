@@ -8,7 +8,7 @@ export type StartResponse = {
   merchantUid: string;       // 서버에서 생성한 결제ID (= paymentId)
   orderName: string;
   amount: number;
-  currency: "KRW";
+  currency: string;
 } | {
   ok: false;
   error: string;
@@ -16,10 +16,10 @@ export type StartResponse = {
 
 type RequestArgs = {
   planId: PlanId;
-  paymentId: string;         // = merchantUid
+  paymentId: string;
   orderName: string;
   amount: number;
-  currency: "KRW";
+  currency: string;
   redirectUrl: string;
   storeId: string;
   channelKey?: string;
