@@ -9,6 +9,9 @@
   },
   "dependencies": {
     "@portone/server-sdk": "^0.15.0",
+    "@supabase/auth-ui-react": "^0.4.7",
+    "@supabase/auth-ui-shared": "^0.1.8",
+    "@supabase/ssr": "^0.7.0",
     "@supabase/supabase-js": "^2.56.0",
     "jsonwebtoken": "^9.0.2",
     "next": "15.5.0",
