@@ -8,7 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
+    "@portone/server-sdk": "^0.15.0",
     "@supabase/supabase-js": "^2.56.0",
+    "jsonwebtoken": "^9.0.2",
     "next": "15.5.0",
     "react": "19.1.0",
     "react-dom": "19.1.0"
