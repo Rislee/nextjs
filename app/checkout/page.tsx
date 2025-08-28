@@ -1,64 +1,75 @@
+// app/checkout/page.tsx
 'use client';
 
 import { useState } from 'react';
+import { requestPortOnePayment } from '@/lib/portone/client';
 
-declare global { interface Window { PortOne: any } }
+type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 
-async function waitForPortOne() {
-  const t0 = Date.now();
-  while (!window.PortOne?.requestPayment) {
-    if (Date.now() - t0 > 5000) throw new Error('PortOne SDK load timeout');
-    await new Promise(r => setTimeout(r, 50));
-  }
-  return window.PortOne;
-}
-
-type PlanId = 'START_OS'|'SIGNATURE_OS'|'MASTER_OS';
+const PLAN_LABEL: Record<PlanId, string> = {
+  START_OS: 'Start OS 결제',
+  SIGNATURE_OS: 'Signature OS 결제',
+  MASTER_OS: 'Master OS 결제',
+};
 
 export default function CheckoutPage() {
-  const [loading, setLoading] = useState<PlanId|null>(null);
+  const [loading, setLoading] = useState<PlanId | null>(null);
   const [msg, setMsg] = useState('');
+
+  async function startOrder(planId: PlanId) {
+    const res = await fetch('/api/checkout/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',               // 🔒 uid 쿠키 포함
+      body: JSON.stringify({ planId }),
+    });
+
+    // 실패 응답도 내용 확인 (빈 바디 방지)
+    const raw = await res.text();
+    let json: any = null;
+    try { json = raw ? JSON.parse(raw) : null; } catch { /* ignore */ }
+
+    if (!res.ok || !json?.ok) {
+      const err = json?.error ?? `start ${res.status}${raw ? `: ${raw}` : ''}`;
+      throw new Error(err);
+    }
+    return json as {
+      ok: true;
+      merchantUid: string;
+      amount: number;
+      currency: string;
+      orderName: string;
+    };
+  }
 
   async function pay(planId: PlanId) {
     try {
       setLoading(planId);
       setMsg('');
 
-      // ✅ 서버가 쿠키(uid)로 사용자 식별 → 클라는 planId만 보냄
-      const res = await fetch('/api/checkout/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ planId }),
-        credentials: 'include'
-      });
+      // 1) 주문 생성(서버가 쿠키 uid로 사용자 식별)
+      const { merchantUid, amount, currency, orderName } = await startOrder(planId);
 
-      if (!res.ok) {
-        const t = await res.text().catch(()=>'');
-        throw new Error(`start ${res.status}${t ? `: ${t}` : ''}`);
-      }
-      const { ok, merchantUid, amount, currency, orderName } = await res.json();
-      if (!ok) throw new Error('start not ok');
-
-      const PortOne = await waitForPortOne();
-
-      const storeId     = process.env.NEXT_PUBLIC_PORTONE_STORE_ID!;
-      const channelKey  = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY;
-      const redirectUrl = process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL!;
-
-      await PortOne.requestPayment({
-        storeId,                 // ✅ 최상위
-        channelKey,              // (선택)
-        paymentId: merchantUid,
-        orderName,
+      // 2) PortOne 브라우저 SDK 호출 (클라이언트 래퍼)
+      await requestPortOnePayment({
+        paymentId:   merchantUid,
+        orderName:   orderName,
         totalAmount: amount,
-        currency: currency || 'KRW',
-        payMethod: 'CARD',
-        redirectUrl
+        currency:    currency || 'KRW',
+        payMethod:   'CARD',
+        redirectUrl: '',            // 비워도 client 래퍼가 env에서 보강
+        // customer: { customerId: '원하면추가' } // 선택
       });
-      // 이후 PortOne이 redirectUrl로 이동
+
+      // 이후 PortOne이 redirectUrl로 이동합니다.
     } catch (e: any) {
       console.error(e);
-      setMsg(`결제 오류: ${e?.message ?? e}`);
+      setMsg(e?.message ?? String(e));
+      // 401이면 로그인 만료 가능성 → 사인인으로 유도
+      if (String(e?.message || '').includes('unauthorized')) {
+        setMsg('로그인이 필요합니다. 다시 로그인 해주세요.');
+        // location.href = 'https://account.inneros.co.kr/auth/sign-in';
+      }
     } finally {
       setLoading(null);
     }
@@ -70,18 +81,20 @@ export default function CheckoutPage() {
       <p className="mt-2 text-sm text-gray-500">플랜을 선택하세요.</p>
 
       <div className="mt-6 grid gap-3">
-        <button disabled={!!loading} onClick={() => pay('START_OS')}>
-          {loading === 'START_OS' ? '진행 중…' : 'Start OS 결제'}
-        </button>
-        <button disabled={!!loading} onClick={() => pay('SIGNATURE_OS')}>
-          {loading === 'SIGNATURE_OS' ? '진행 중…' : 'Signature OS 결제'}
-        </button>
-        <button disabled={!!loading} onClick={() => pay('MASTER_OS')}>
-          {loading === 'MASTER_OS' ? '진행 중…' : 'Master OS 결제'}
-        </button>
+        {(Object.keys(PLAN_LABEL) as PlanId[]).map((id) => (
+          <button
+            key={id}
+            onClick={() => pay(id)}
+            disabled={!!loading}
+            className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-60"
+            aria-busy={loading === id}
+          >
+            {loading === id ? '진행 중…' : PLAN_LABEL[id]}
+          </button>
+        ))}
       </div>
 
-      {!!msg && <p className="mt-3 text-sm text-red-500">{msg}</p>}
+      {!!msg && <p className="mt-4 text-sm text-red-500">{msg}</p>}
     </main>
   );
 }
