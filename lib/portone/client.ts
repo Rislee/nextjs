@@ -1,73 +1,105 @@
 // lib/portone/client.ts
-// 브라우저에서 PortOne 결제창을 여는 얇은 래퍼
+'use client';
+
+/**
+ * PortOne v1 (iamport.js) 클라이언트 래퍼
+ * - storeId 요구 X
+ * - IMP.request_pay 사용
+ * - 채널키(channelKey)는 있으면 전달, 없어도 동작
+ */
 
 declare global {
   interface Window {
-    PortOne?: {
-      requestPayment: (payload: any) => Promise<any>;
-    };
+    IMP?: any;
   }
 }
 
-export type RequestArgs = {
-  paymentId: string;         // 주문(결제) 식별자 = merchantUid
-  orderName: string;         // 주문명
-  // 금액은 두 키 중 아무거나 써도 됨 (amount 또는 totalAmount)
-  amount?: number;
-  totalAmount?: number;
-
-  currency?: string;         // 기본: 'KRW'
-  payMethod?: 'CARD' | string; // 기본: 'CARD'
-  redirectUrl: string;       // 결제 완료 후 돌아올 URL
+type RequestArgs = {
+  paymentId: string;     // merchant_uid
+  orderName: string;     // name
+  amount: number;        // amount (숫자)
+  redirectUrl: string;   // m_redirect_url
+  channelKey?: string;   // 선택: 콘솔의 채널키
+  buyer?: {
+    email?: string;
+    name?: string;
+    tel?: string;
+    addr?: string;
+    postcode?: string;
+  };
 };
 
-/** PortOne 스크립트가 로드되어 있고, window.PortOne 이 있는지 확인 */
-function ensurePortOne() {
-  if (typeof window === 'undefined') {
-    throw new Error('PortOne SDK must run in the browser.');
+const IMP_SRC = 'https://cdn.iamport.kr/v1/iamport.js';
+const IMP_CODE = process.env.NEXT_PUBLIC_IAMPORT_CODE;            // 예: imp00000000
+const DEFAULT_CHANNEL_KEY = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY; // 선택
+
+async function loadIamport(): Promise<any> {
+  if (typeof window === 'undefined') throw new Error('client only');
+
+  if (!window.IMP) {
+    await new Promise<void>((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = IMP_SRC;
+      s.async = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('iamport.js load failed'));
+      document.head.appendChild(s);
+    });
   }
-  if (!window.PortOne || typeof window.PortOne.requestPayment !== 'function') {
-    throw new Error('window.PortOne is not available. Did you load the PortOne script?');
+
+  const IMP = window.IMP;
+  if (!IMP) throw new Error('IMP not available');
+
+  // 고객사 식별코드가 있으면 초기화
+  if (IMP_CODE) {
+    try { IMP.init(IMP_CODE); } catch {}
   }
-  return window.PortOne;
+
+  return IMP;
 }
 
-/** 환경변수 체크 (클라이언트에서 NEXT_PUBLIC_* 로 읽음) */
-function getEnv() {
-  const storeId = process.env.NEXT_PUBLIC_PORTONE_STORE_ID;
-  const channelKey = process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY;
-  if (!storeId) throw new Error('Missing NEXT_PUBLIC_PORTONE_STORE_ID');
-  // 채널키는 PG에 따라 필수일 수 있음 → 있으면 붙이고, 없으면 생략 가능하도록 처리
-  return { storeId, channelKey };
-}
+/** 결제창 호출 */
+export async function requestPortOnePayment(args: RequestArgs): Promise<void> {
+  const IMP = await loadIamport();
 
-export async function requestPortOnePayment(args: RequestArgs) {
-  const PortOne = ensurePortOne();
-  const { storeId, channelKey } = getEnv();
+  const channelKey = args.channelKey ?? DEFAULT_CHANNEL_KEY;
 
-  const total = args.totalAmount ?? args.amount;
-  if (typeof total !== 'number' || !isFinite(total)) {
-    throw new Error('Invalid amount / totalAmount');
-  }
-
-  // PortOne 브라우저 SDK 페이로드 (v2 스펙과 호환)
-  const payload: any = {
-    storeId,
-    paymentId: args.paymentId,
-    orderName: args.orderName,
-    totalAmount: total,                      // PortOne은 totalAmount 키를 사용
-    currency: args.currency ?? 'KRW',
-    redirectUrl: args.redirectUrl,
+  const params: any = {
+    // v1 공통 파라미터
+    merchant_uid: args.paymentId,
+    name: args.orderName,
+    amount: args.amount,
+    pay_method: 'card',
+    // 모바일 리다이렉트용
+    m_redirect_url: args.redirectUrl,
   };
-  if (args.payMethod) payload.payMethod = args.payMethod;
-  if (channelKey) payload.channelKey = channelKey;
 
-  if (process.env.NODE_ENV !== 'production') {
-    // 디버깅 로그 (민감정보 없음)
-    // eslint-disable-next-line no-console
-    console.log('[PortOne payload]', payload);
+  // 채널키가 있으면 포함 (콘솔 연동정보 사용 시 권장)
+  if (channelKey) params.channelKey = channelKey;
+
+  // 구매자 정보(선택)
+  if (args.buyer) {
+    const { email, name, tel, addr, postcode } = args.buyer;
+    if (email) params.buyer_email = email;
+    if (name) params.buyer_name = name;
+    if (tel) params.buyer_tel = tel;
+    if (addr) params.buyer_addr = addr;
+    if (postcode) params.buyer_postcode = postcode;
   }
 
-  // 결제창 호출
-  return await PortOne.requestPayment(payload);
+  // Promise 형태로 감싸서 에러 처리 단순화
+  await new Promise<void>((resolve, reject) => {
+    try {
+      IMP.request_pay(params, (rsp: any) => {
+        // 리다이렉트 모드면 콜백이 안 올 수도 있음 (모바일 등)
+        if (rsp && rsp.error_code) {
+          reject(new Error(rsp.error_msg || 'payment_failed'));
+        } else {
+          resolve();
+        }
+      });
+    } catch (e) {
+      reject(e);
+    }
+  });
 }

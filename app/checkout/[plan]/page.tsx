@@ -10,6 +10,7 @@ type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 export default function CheckoutPlanPage() {
   const params = useParams<{ plan: string }>();
   const router = useRouter();
+
   const planId = useMemo<PlanId | null>(() => {
     const p = (params?.plan || '').toUpperCase();
     return (['START_OS', 'SIGNATURE_OS', 'MASTER_OS'] as const).includes(p as any)
@@ -27,12 +28,13 @@ export default function CheckoutPlanPage() {
         setSubmsg('잘못된 플랜입니다.');
         return;
       }
+
       try {
-        // 1) 서버에서 주문 생성
+        // 1) 서버에서 주문 생성 (POST 필수)
         const res = await fetch('/api/checkout/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          credentials: 'include', // uid 쿠키 포함
           body: JSON.stringify({ planId }),
         });
 
@@ -49,21 +51,20 @@ export default function CheckoutPlanPage() {
           ok: true; merchantUid: string; amount: number; orderName: string;
         };
 
-        // 2) 포트원 결제창 띄우기
+        // 2) PortOne v1 결제창 호출 (currency/payMethod/totalAmount/ storeId 없이)
         await requestPortOnePayment({
-          paymentId: merchantUid,
-          orderName,
-          amount,
-          currency: 'KRW',
+          paymentId:  merchantUid,
+          orderName:  orderName,
+          amount:     amount, // 숫자
           redirectUrl: 'https://account.inneros.co.kr/checkout/complete',
+          // channelKey: 필요 시 옵션으로 추가 가능
         });
 
-        // 결제창에서 완료되면 redirectUrl로 이동함
+        // 결제 완료 후에는 redirectUrl로 이동함
       } catch (e: any) {
         console.error(e);
         setMsg('오류');
         setSubmsg(String(e?.message ?? e));
-        // 401이면 로그인 만료일 가능성이 큼 → 로그인 페이지로 보낼지 선택
         if (String(e?.message || '').includes('unauthorized')) {
           router.replace(`/auth/sign-in?next=/checkout/${planId}`);
         }
