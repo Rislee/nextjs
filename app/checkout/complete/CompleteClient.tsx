@@ -1,8 +1,8 @@
-// app/checkout/complete/CompleteClient.tsx  (✅ 클라이언트)
 "use client";
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+
 
 export default function CompleteClient() {
   const sp = useSearchParams();
@@ -53,4 +53,21 @@ export default function CompleteClient() {
       {verify?.ok && <p style={{ color: "dodgerblue" }}>검증 OK</p>}
     </main>
   );
+
+  // verify 결과 렌더링 일부만 추가
+{verify && (
+  <div style={{ marginTop: 12, fontSize: 12 }}>
+    <div>server.ok: {String(verify.ok)}</div>
+    {"status" in verify && <div>server.status: {verify.status || "-"}</div>}
+    {"failure" in verify && verify.failure && (
+      <div>
+        <div>reason: {verify.failure.reason || "-"}</div>
+        <div>pgCode: {verify.failure.pgCode || "-"}</div>
+        <div>pgMessage: {verify.failure.pgMessage || "-"}</div>
+      </div>
+    )}
+  </div>
+)}
+
 }
+
