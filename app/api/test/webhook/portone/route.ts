@@ -20,115 +20,127 @@ export async function GET() {
   });
 }
 
-// 내부 전용 테스트 엔드포인트: x-internal-key 헤더 필요
 export async function POST(req: Request) {
   const key = req.headers.get("x-internal-key") || "";
   if (key !== (process.env.INTERNAL_API_KEY ?? "")) {
-    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
+    return json({ ok: false, error: "unauthorized" }, 401);
   }
 
   let body: any = {};
-  try {
-    body = await req.json();
-  } catch {
-    // ignore
-  }
-  const d: any = body?.data ?? body ?? {};
+  try { body = await req.json(); } catch {}
 
-  // merchantUid (= checkout/start에서 만든 결제ID)
+  const d: any = body?.data ?? body ?? {};
   const merchantUid: string | undefined =
     pick(d, "paymentId", "id", "merchantUid", "merchant_uid");
+
   if (!merchantUid) {
-    return new Response(JSON.stringify({ ok: false, error: "missing_paymentId" }), {
-      status: 400,
-      headers: { "content-type": "application/json" },
-    });
+    return json({ ok: false, error: "missing_paymentId" }, 400);
   }
 
   const statusRaw = String(pick(d, "status", "paymentStatus") ?? "").toLowerCase();
   const amountObj = pick(d, "amount");
-  const amountTotal: number | null = amountObj?.total ?? amountObj ?? null;
-  const currency: string = pick(d, "currency") ?? "KRW";
+  const amountTotalRaw: any = amountObj?.total ?? amountObj ?? null;
+  const amountTotal =
+    typeof amountTotalRaw === "number" ? amountTotalRaw :
+    typeof amountTotalRaw === "string" ? Number(amountTotalRaw) :
+    null;
+
+  const currency: string = String(pick(d, "currency") ?? "KRW");
   const transactionId: string | undefined = pick(d, "transactionId", "txId", "txid");
   const failure = BAD.has(statusRaw) ? (pick(d, "failure") ?? null) : null;
 
   const mappedStatus =
     OK.has(statusRaw) ? "paid" : BAD.has(statusRaw) ? "failed" : (statusRaw || "unknown");
 
-  // 주문 찾기
-  const { data: payRow, error: selErr } = await supabaseAdmin
+  // 1) 주문 조회
+  const sel = await supabaseAdmin
     .from("payments")
     .select("*")
     .eq("merchant_uid", merchantUid)
     .maybeSingle();
 
-  if (selErr) {
-    console.error("[test:webhook] payments.select error", selErr);
-    return new Response(JSON.stringify({ ok: false, error: "select_failed" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+  if (sel.error) {
+    return json({ ok: false, step: "select", error: "select_failed", detail: sel.error }, 500);
   }
-  if (!payRow) {
-    return new Response(JSON.stringify({ ok: false, error: "payment_not_found", merchantUid }), {
-      status: 404,
-      headers: { "content-type": "application/json" },
-    });
+  if (!sel.data) {
+    return json({ ok: false, error: "payment_not_found", merchantUid }, 404);
   }
 
-  // payments 갱신
+  const payRow: any = sel.data;
+
+  // 2) payments 업데이트
   const upd = {
     status: mappedStatus,
     portone_payment_id: merchantUid,
     portone_transaction_id: transactionId ?? null,
     amount_total: amountTotal ?? payRow.amount_total ?? null,
-    currency: currency ?? payRow.currency ?? "KRW",
+    currency,
     failure,
     updated_at: new Date().toISOString(),
   };
 
-  const { error: upErr } = await supabaseAdmin
+  const up = await supabaseAdmin
     .from("payments")
     .update(upd)
     .eq("merchant_uid", merchantUid);
 
-  if (upErr) {
-    console.error("[test:webhook] payments.update error", upErr);
-    return new Response(JSON.stringify({ ok: false, error: "update_failed" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+  if (up.error) {
+    return json({ ok: false, step: "payments.update", error: "update_failed", detail: up.error }, 500);
   }
 
-  // 성공이면 memberships 활성화(멱등 upsert)
+  // 3) memberships 활성화 (paid일 때만)
   let membershipUpserted = false;
   if (OK.has(statusRaw)) {
-    const { user_id, plan_id } = payRow as any;
+    const { user_id, plan_id } = payRow;
     if (user_id && plan_id) {
-      const { error: upsertErr } = await supabaseAdmin
+      // 먼저 update 시도 → 없으면 insert
+      const up1 = await supabaseAdmin
         .from("memberships")
-        .upsert(
-          {
-            user_id,
-            plan_id,
-            status: "active",
-            updated_at: new Date().toISOString(),
-          },
-          { onConflict: "user_id" }
-        );
-      if (upsertErr) {
-        console.error("[test:webhook] memberships.upsert error", upsertErr);
-      } else {
-        membershipUpserted = true;
+        .update({
+          plan_id,
+          status: "active",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", user_id);
+
+      if (up1.error) {
+        return json({ ok: false, step: "memberships.update", error: "update_failed", detail: up1.error }, 500);
       }
+
+      if (up1.count === 0) {
+        // count를 보려면 .select()가 필요하지만 postgrest-js v1에서는 update count 반환이 제한적.
+        // 안전하게 한번 더 조회해서 없으면 insert
+        const chk = await supabaseAdmin
+          .from("memberships")
+          .select("user_id")
+          .eq("user_id", user_id)
+          .maybeSingle();
+
+        if (!chk.data) {
+          const ins = await supabaseAdmin
+            .from("memberships")
+            .insert({
+              user_id,
+              plan_id,
+              status: "active",
+              updated_at: new Date().toISOString(),
+            });
+          if (ins.error) {
+            return json({ ok: false, step: "memberships.insert", error: "insert_failed", detail: ins.error }, 500);
+          }
+        }
+      }
+
+      membershipUpserted = true;
     }
   }
 
-  return new Response(
-    JSON.stringify({ ok: true, merchantUid, mappedStatus, membershipUpserted }),
-    { status: 200, headers: { "content-type": "application/json" } }
-  );
+  return json({ ok: true, merchantUid, mappedStatus, membershipUpserted }, 200);
+}
+
+function json(obj: any, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
 }
