@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { requestPortOnePayment } from '@/lib/portone/client';
+import { requestIamportPay } from '@/lib/portone/v1-client';
 
 type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 
@@ -30,11 +30,11 @@ export default function CheckoutPlanPage() {
       }
 
       try {
-        // 1) 서버에서 주문 생성 (POST 필수)
+        // 1) 주문 생성 (POST 필수, uid 쿠키 포함)
         const res = await fetch('/api/checkout/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include', // uid 쿠키 포함
+          credentials: 'include',
           body: JSON.stringify({ planId }),
         });
 
@@ -51,16 +51,19 @@ export default function CheckoutPlanPage() {
           ok: true; merchantUid: string; amount: number; orderName: string;
         };
 
-        // 2) PortOne v1 결제창 호출 (currency/payMethod/totalAmount/ storeId 없이)
-        await requestPortOnePayment({
-          paymentId:  merchantUid,
-          orderName:  orderName,
-          amount:     amount, // 숫자
-          redirectUrl: 'https://account.inneros.co.kr/checkout/complete',
-          // channelKey: 필요 시 옵션으로 추가 가능
+        // 2) PortOne v1 (아임포트) 결제창 호출
+        const redirectUrl =
+          process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL ||
+          'https://account.inneros.co.kr/checkout/complete';
+
+        await requestIamportPay({
+          merchant_uid: merchantUid,
+          name:        orderName,
+          amount:      amount,
+          redirectUrl, // 모바일 완료 후 이동
         });
 
-        // 결제 완료 후에는 redirectUrl로 이동함
+        // 결제 완료 시 redirectUrl로 이동함 (모바일/일부 환경)
       } catch (e: any) {
         console.error(e);
         setMsg('오류');
