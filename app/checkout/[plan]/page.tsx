@@ -80,21 +80,28 @@ export default function CheckoutPlanPage() {
         });
 
         // 결제창으로 제어가 넘어감 (redirectUrl로 돌아옴)
-      } catch (e: any) {
+        } catch (e: any) {
         console.error(e);
         const message = String(e?.message || e || 'unknown');
 
-        // 401: 로그인 필요 → 로그인으로 보내고, 로그인 후 이 페이지로 복귀
-        if (message.includes('unauthorized') || message.includes('401')) {
-          const next = encodeURIComponent(typeof window !== 'undefined'
-            ? window.location.href
-            : `/checkout/${planId}`);
-          window.location.href = `/auth/sign-in?next=${next}`;
+         if (message.includes('unauthorized') || message.includes('401')) {
+            const here = typeof window !== 'undefined' ? window.location.href : `/checkout/${planId}`;
+
+            // ✅ 보조용 쿠키 저장 (10분)
+           const sameSite = 'Lax';
+          const domain =
+            typeof window !== 'undefined' && location.hostname.endsWith('inneros.co.kr')
+              ? 'Domain=.inneros.co.kr; '
+                : '';
+           document.cookie = `returnTo=${encodeURIComponent(here)}; ${domain}Path=/; Max-Age=600; SameSite=${sameSite}`;
+
+            // ✅ next 파라미터도 함께 전달
+           window.location.href = `/auth/sign-in?next=${encodeURIComponent(here)}`;
           return;
         }
 
-        setMsg(`오류: ${message}`);
-      }
+  setMsg(`오류: ${message}`);
+}
     })();
 
     return () => { cancelled = true; };
