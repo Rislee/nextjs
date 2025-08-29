@@ -1,4 +1,3 @@
-// app/api/webhook/portone/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { getV1AccessToken, getV1Payment } from '@/lib/portone/v1';
@@ -7,11 +6,11 @@ export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-// 포트원 V1 webhook payload는 케이스가 다양할 수 있어 폭넓게 파싱
+/** 안전하게 중첩 경로에서 값 뽑기 */
 function pick(value: any, ...paths: string[]): string | undefined {
   for (const p of paths) {
     const seg = p.split('.');
-    let cur: any = value;
+    let cur = value;
     let ok = true;
     for (const s of seg) {
       if (cur && typeof cur === 'object' && s in cur) cur = cur[s];
@@ -24,81 +23,62 @@ function pick(value: any, ...paths: string[]): string | undefined {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-
-    // imp_uid / merchant_uid 추출 (여러 형태 대응) + trim
-    const impUid = (pick(body, 'imp_uid', 'data.imp_uid', 'data.id', 'id') ?? '').toString().trim();
-    const givenMerchantUid = (pick(
+    // 1) 바디 파싱 (v1은 포맷 제각각이라 폭넓게 대응)
+    const body = await req.json().catch(() => ({} as any));
+    const impUid = pick(body, 'imp_uid', 'data.imp_uid', 'id', 'data.id');
+    const merchantUid = pick(
       body,
       'merchant_uid',
       'data.merchant_uid',
-      'merchantOrderId',
-      'merchant_order_id'
-    ) ?? '').toString().trim();
+      'merchant_order_id',
+      'merchantOrderId'
+    );
 
     if (!impUid) {
+      // imp_uid가 없으면 검증 불가
       return NextResponse.json({ ok: false, error: 'missing_imp_uid' }, { status: 400 });
     }
 
-    // V1 원장 조회로 상태/merchant_uid 신뢰값 확보
+    // 2) v1 결제 조회
     const token = await getV1AccessToken();
-    const pay = await getV1Payment(impUid, token); // { imp_uid, merchant_uid, status, amount, currency, fail_reason ... }
-    const bookMerchantUid = (pay.merchant_uid ?? '').toString().trim();
-    const now = new Date().toISOString();
+    const pay = await getV1Payment(impUid, token);
+    // pay: { imp_uid, merchant_uid, status: 'paid'|'failed'|'cancelled'|'ready'..., amount, currency, fail_reason? }
 
-    // 수동 테스트 등으로 넘어온 merchant_uid와 불일치해도 차단하지 않고 로그만 남김
-    if (givenMerchantUid && bookMerchantUid && givenMerchantUid !== bookMerchantUid) {
-      console.warn('[webhook] merchant_uid mismatch (ignored)', {
-        given: givenMerchantUid,
-        book: bookMerchantUid,
-      });
+    // (선택) merchant_uid 교차검증: 있으면 동일해야 함
+    if (merchantUid && pay.merchant_uid && merchantUid !== pay.merchant_uid) {
+      // 포맷/매칭 문제는 400으로 알려줌
+      return NextResponse.json({ ok: false, error: 'merchant_mismatch' }, { status: 400 });
     }
 
-    // ── 상태별 처리 ──────────────────────────────────────────────────────────────
+    const now = new Date().toISOString();
+
+    // 3) 상태별 처리
     if (pay.status === 'paid') {
-      // 1) update (멱등) 후 0행이면 insert 보정
-      const up = await supabaseAdmin
+      // payments 갱신
+      const up1 = await supabaseAdmin
         .from('payments')
         .update({
           status: 'paid',
           amount_total: pay.amount ?? null,
           currency: pay.currency ?? null,
-          portone_payment_id: pay.imp_uid, // ✅ imp_uid 저장
+          portone_payment_id: pay.imp_uid,
           failure: null,
           updated_at: now,
         })
-        .eq('merchant_uid', bookMerchantUid)
-        .select('id');
+        .eq('merchant_uid', pay.merchant_uid);
 
-      if (up.error) {
-        return NextResponse.json({ ok: false, step: 'payments.update', detail: up.error }, { status: 500 });
+      if (up1.error) {
+        return NextResponse.json(
+          { ok: false, step: 'payments.update', detail: up1.error },
+          { status: 500 }
+        );
       }
 
-      if (!up.data || up.data.length === 0) {
-        const ins = await supabaseAdmin
-          .from('payments')
-          .insert({
-            merchant_uid: bookMerchantUid,
-            status: 'paid',
-            amount_total: pay.amount ?? null,
-            currency: pay.currency ?? null,
-            portone_payment_id: pay.imp_uid,
-            failure: null,
-            created_at: now,
-            updated_at: now,
-          })
-          .select('id');
-
-        if (ins.error) {
-          return NextResponse.json({ ok: false, step: 'payments.insert', detail: ins.error }, { status: 500 });
-        }
-      }
-
-      // 2) memberships 활성화 (payments에 user_id, plan_id가 있으면)
+      // memberships 활성화 (user_id, plan_id를 payments에서 가져옴)
       const q = await supabaseAdmin
         .from('payments')
         .select('user_id, plan_id')
-        .eq('merchant_uid', bookMerchantUid)
+        .eq('merchant_uid', pay.merchant_uid)
         .maybeSingle();
 
       if (!q.error && q.data?.user_id && q.data?.plan_id) {
@@ -106,10 +86,13 @@ export async function POST(req: NextRequest) {
           .from('memberships')
           .upsert(
             { user_id: q.data.user_id, plan_id: q.data.plan_id, status: 'active', updated_at: now },
-            { onConflict: 'user_id' },
+            { onConflict: 'user_id' }
           );
         if (up2.error) {
-          return NextResponse.json({ ok: false, step: 'memberships.upsert', detail: up2.error }, { status: 500 });
+          return NextResponse.json(
+            { ok: false, step: 'memberships.upsert', detail: up2.error },
+            { status: 500 }
+          );
         }
       }
 
@@ -124,15 +107,18 @@ export async function POST(req: NextRequest) {
           failure: pay.fail_reason ? { reason: pay.fail_reason } : null,
           updated_at: now,
         })
-        .eq('merchant_uid', bookMerchantUid);
+        .eq('merchant_uid', pay.merchant_uid);
 
       if (up.error) {
-        return NextResponse.json({ ok: false, step: 'payments.update', detail: up.error }, { status: 500 });
+        return NextResponse.json(
+          { ok: false, step: 'payments.update', detail: up.error },
+          { status: 500 }
+        );
       }
       return NextResponse.json({ ok: true, status: pay.status });
     }
 
-    // ready 등 기타 상태는 200
+    // ready 등 기타 상태는 200으로 처리
     return NextResponse.json({ ok: true, status: pay.status });
   } catch (e: any) {
     console.error('webhook v1 error', e);
