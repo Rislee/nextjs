@@ -1,7 +1,7 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useEffect, useMemo, useState } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 
 export default function Page() {
   return (
@@ -13,11 +13,28 @@ export default function Page() {
 
 function Content() {
   const sp = useSearchParams();
+  const router = useRouter();
+
   const impUid = sp.get('imp_uid') ?? '';
   const merchantUid = sp.get('merchant_uid') ?? '';
   const success = sp.get('success') ?? '';
 
   const [verifyMsg, setVerifyMsg] = useState('검증 대기중…');
+
+  // merchantUid 예: inneros_START_OS_1756441617463
+  const planFromMerchant = useMemo(() => {
+    const parts = (merchantUid || '').split('_'); // ['inneros', 'START_OS', '1756...']
+    return (parts[1] as 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS' | undefined) ?? undefined;
+  }, [merchantUid]);
+
+  const nextUrl = useMemo(() => {
+    switch (planFromMerchant) {
+      case 'START_OS':     return '/start';
+      case 'SIGNATURE_OS': return '/signature';
+      case 'MASTER_OS':    return '/master';
+      default:             return '/';
+    }
+  }, [planFromMerchant]);
 
   useEffect(() => {
     (async () => {
@@ -29,13 +46,19 @@ function Content() {
           body: JSON.stringify({ impUid, merchantUid }),
         });
         const j = await r.json();
-        if (j?.ok) setVerifyMsg('검증 OK');
-        else setVerifyMsg(`검증 실패: ${j?.error ?? r.status}`);
+
+        if (j?.ok) {
+          setVerifyMsg('검증 OK — 잠시 후 이동합니다…');
+          // 1.2초 후 플랜별 페이지로 이동 (가드 미들웨어가 접근권한 체크)
+          setTimeout(() => router.replace(nextUrl), 1200);
+        } else {
+          setVerifyMsg(`검증 실패: ${j?.error ?? r.status}`);
+        }
       } catch (e: any) {
         setVerifyMsg(`검증 실패: ${e?.message ?? 'unknown'}`);
       }
     })();
-  }, [impUid, merchantUid]);
+  }, [impUid, merchantUid, nextUrl, router]);
 
   return (
     <main className="mx-auto max-w-xl p-6">
