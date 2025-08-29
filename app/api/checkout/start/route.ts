@@ -9,7 +9,7 @@ export const revalidate = 0;
 type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 
 const PRICE: Record<PlanId, number> = {
-  START_OS: 5_500_000,
+  START_OS: 1000,
   SIGNATURE_OS: 11_000_000,
   MASTER_OS: 22_000_000,
 };
