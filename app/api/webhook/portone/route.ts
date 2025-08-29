@@ -1,69 +1,68 @@
-import { NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
+// app/api/webhook/portone/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getV1AccessToken, getV1Payment } from '@/lib/portone/v1';
+// import { supabaseAdmin } from '@/lib/supabaseAdmin'; // DB 반영이 필요하면 사용
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'; // Vercel 캐시 방지
 
-async function getV1Token() {
-  const key = process.env.PORTONE_V1_API_KEY!;
-  const secret = process.env.PORTONE_V1_API_SECRET!;
-  const r = await fetch('https://api.iamport.kr/users/getToken', {
-    method: 'POST',
-    headers: { 'Content-Type':'application/json' },
-    body: JSON.stringify({ imp_key: key, imp_secret: secret }),
-    cache: 'no-store'
-  });
-  const j = await r.json();
-  return j?.response?.access_token as string | undefined;
-}
+export async function POST(req: NextRequest) {
+  try {
+    // 1) Content-Type 별 파싱 (V1은 JSON 또는 x-www-form-urlencoded 둘 다 가능)
+    const ct = req.headers.get('content-type') || '';
+    let payload: any = {};
+    if (ct.includes('application/json')) {
+      payload = await req.json();
+    } else if (ct.includes('application/x-www-form-urlencoded')) {
+      const form = await req.formData();
+      payload = Object.fromEntries(form.entries());
+    } else {
+      return NextResponse.json({ ok: false, error: 'unsupported_content_type' }, { status: 415 });
+    }
 
-export async function POST(req: Request) {
-  // 표준 웹훅: body에 imp_uid/merchant_uid 등이 옴 (V1)
-  const body = await req.json().catch(() => ({}));
-  const impUid = body?.imp_uid || body?.data?.imp_uid;
-  const merchantUid = body?.merchant_uid || body?.data?.merchant_uid;
+    // 2) V1 웹훅 필드 (imp_uid, merchant_uid, status)
+    const imp_uid = String(payload.imp_uid || '');
+    const merchant_uid = String(payload.merchant_uid || '');
+    const hookStatus = String(payload.status || '');
 
-  if (!impUid && !merchantUid) {
-    return NextResponse.json({ ok:false, error:'missing_params' }, { status:400 });
+    if (!imp_uid) {
+      return NextResponse.json({ ok: false, error: 'imp_uid_missing' }, { status: 400 });
+    }
+
+    // 3) 포트원 V1로 결제건 조회하여 검증
+    const token = await getV1AccessToken();
+    const pay = await getV1Payment(imp_uid, token);
+    // pay.status: 'paid' | 'ready' | 'failed' | 'cancelled'
+    // pay.amount: 결제금액(정수)
+
+    // (선택) merchant_uid 일치 여부 확인
+    if (merchant_uid && pay.merchant_uid && merchant_uid !== pay.merchant_uid) {
+      // 불일치하면 무시 or 로깅
+      console.warn('merchant_uid mismatch', { hook: merchant_uid, api: pay.merchant_uid });
+    }
+
+    // 4) 여기서 금액/화폐 등 비즈니스 검증
+    // ex) DB의 주문금액과 pay.amount 동일한지 확인 등…
+    // const { data: order } = await supabaseAdmin.from('orders').select('amount').eq('merchant_uid', pay.merchant_uid).single();
+    // if (order?.amount !== pay.amount) { ... }
+
+    // 5) DB 반영 (예시)
+    // await supabaseAdmin.from('payments')
+    //   .update({
+    //     status: pay.status,           // 'paid' | 'failed' | 'cancelled' | 'ready'
+    //     amount_total: pay.amount,
+    //     currency: pay.currency ?? 'KRW',
+    //     portone_payment_id: pay.imp_uid,
+    //     updated_at: new Date().toISOString(),
+    //   })
+    //   .eq('merchant_uid', pay.merchant_uid);
+
+    // if (pay.status === 'paid') {
+    //   // memberships 활성화 등 후처리…
+    // }
+
+    return NextResponse.json({ ok: true, imp_uid: pay.imp_uid, status: pay.status });
+  } catch (e: any) {
+    console.error(e);
+    return NextResponse.json({ ok: false, error: e?.message ?? 'unknown_error' }, { status: 500 });
   }
-
-  const token = await getV1Token();
-  if (!token) return NextResponse.json({ ok:false, error:'v1_token_failed' }, { status:400 });
-
-  let mu = merchantUid as string | undefined;
-
-  if (impUid) {
-    const payR = await fetch(`https://api.iamport.kr/payments/${impUid}`, {
-      headers: { Authorization: token },
-      cache: 'no-store'
-    });
-    if (!payR.ok) return NextResponse.json({ ok:false, error:`v1_getPayment ${payR.status}` }, { status:400 });
-    const pay = (await payR.json())?.response;
-    if (!pay) return NextResponse.json({ ok:false, error:'no_payment' }, { status:400 });
-    mu = mu ?? pay.merchant_uid;
-  }
-
-  if (!mu) return NextResponse.json({ ok:false, error:'merchant_not_found' }, { status:400 });
-
-  // 최소 반영(상태/금액/통화) — 필요한 컬럼만 안전하게
-  const sel = await supabaseAdmin.from('payments').select('*').eq('merchant_uid', mu).maybeSingle();
-  if (sel.error || !sel.data) return NextResponse.json({ ok:false, error:'payment_not_found' }, { status:404 });
-
-  const row = sel.data as Record<string, any>;
-  const upd: Record<string, any> = {};
-  const status = (body?.status || body?.data?.status || '').toLowerCase();
-  if ('status' in row) {
-    if (status === 'paid') upd.status = 'paid';
-    else if (status) upd.status = status;
-  }
-  if ('amount' in row && body?.data?.amount?.total) upd.amount = Number(body.data.amount.total);
-  if ('currency' in row && body?.data?.currency) upd.currency = String(body.data.currency);
-  if ('updated_at' in row) upd.updated_at = new Date().toISOString();
-
-  if (Object.keys(upd).length) {
-    const up = await supabaseAdmin.from('payments').update(upd).eq('merchant_uid', mu);
-    if (up.error) return NextResponse.json({ ok:false, error:'payments.update_failed', detail: up.error }, { status:500 });
-  }
-
-  return NextResponse.json({ ok:true });
 }

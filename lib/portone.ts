@@ -1,30 +1,27 @@
 // lib/portone.ts
 export type PortonePayment = {
-  id: string;
-  status: string; // "PAID" | "SUCCESS" 등
-  amount?: { total?: number };
-  currency?: string; // "KRW"
+  id: string;                 // 포트원 결제 ID (imp_uid 유사)
+  status: 'PAID' | 'FAILED' | 'CANCELED' | string;
+  currency?: string;
   orderName?: string;
+  amount?: { total?: number } | null;
+  merchantId?: string | null;
+  storeId?: string | null;
+  channel?: { key?: string | null } | null;
+  customer?: { id?: string | null } | null;
+  // v1 응답 차이를 흡수하기 위해 느슨하게 둠
 };
 
-export async function getPayment(paymentId: string): Promise<PortonePayment> {
-  const secret = (process.env.PORTONE_API_SECRET ?? "").trim();
-  if (!secret) throw new Error("missing PORTONE_API_SECRET");
-
-  const url = `https://api.portone.io/payments/${encodeURIComponent(paymentId)}`;
-  const res = await fetch(url, {
+export async function getPaymentById(paymentId: string): Promise<PortonePayment> {
+  const secret = process.env.PORTONE_V1_API_SECRET!;
+  const r = await fetch(`https://api.portone.io/payments/${encodeURIComponent(paymentId)}`, {
     headers: { Authorization: `PortOne ${secret}` },
-    cache: "no-store",
+    // 웹훅/검증은 항상 최신값 필요
+    cache: 'no-store',
   });
-
-  const text = await res.text(); // 에러 메시지 보존
-  if (!res.ok) {
-    throw new Error(`PortOne getPayment ${res.status}: ${text || ""}`.trim());
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    throw new Error(`PortOne getPayment ${r.status}${text ? `: ${text}` : ''}`);
   }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("PortOne getPayment: bad JSON");
-  }
+  return r.json();
 }
