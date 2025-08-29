@@ -1,4 +1,3 @@
-// app/api/checkout/verify/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getPayment } from "@/lib/portone";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
