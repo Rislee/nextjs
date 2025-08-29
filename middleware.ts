@@ -27,11 +27,12 @@ export async function middleware(req: NextRequest) {
   if (!guard) return NextResponse.next();
 
   // uid 쿠키가 없으면 로그인으로
-  const uid = req.cookies.get("uid")?.value || "";
+  const uid = req.cookies.get("uid")?.value;
   if (!uid) {
-    const url = new URL("/auth/sign-in", req.url);
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    // ❌ return NextResponse.redirect(new URL("/signin", req.url));
+    // ✅ 올바른 경로 + next 붙여서 돌아오게
+    const next = encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search);
+    return NextResponse.redirect(new URL(`/auth/sign-in?next=${next}`, req.url));
   }
 
   const statusUrl = new URL("/api/membership/status", req.url);
@@ -64,7 +65,6 @@ export async function middleware(req: NextRequest) {
   return NextResponse.next();
 }
 
-// ✅ 매처는 "페이지 경로"만 대상으로
 export const config = {
   matcher: [
     "/start/:path*",
