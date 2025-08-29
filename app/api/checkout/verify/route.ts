@@ -61,12 +61,15 @@ export async function POST(req: Request) {
   // 멤버십 활성화
   const { user_id, plan_id } = row;
   if (user_id && plan_id) {
-    const u = await supabaseAdmin
+    const up = await supabaseAdmin
       .from('memberships')
-      .update({ status:'active', plan_id, updated_at: new Date().toISOString() })
-      .eq('user_id', user_id);
-    if (u.error) return NextResponse.json({ ok:false, error:'memberships.update_failed', detail: u.error }, { status:500 });
-  }
+      .upsert(
+       { user_id, plan_id, status: 'active', updated_at: new Date().toISOString() },
+       { onConflict: 'user_id' }
+      );
 
+    if (up.error) {
+      return NextResponse.json({ ok:false, error:'memberships.upsert_failed', detail: up.error }, { status:500 });
+    }}
   return NextResponse.json({ ok:true, via:'v1', impUid, merchantUid });
 }
