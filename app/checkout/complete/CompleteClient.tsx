@@ -1,4 +1,4 @@
-// app/checkout/complete/CompleteClient.tsx
+// app/checkout/complete/CompleteClient.tsx  (✅ 클라이언트)
 "use client";
 
 import { useEffect, useState } from "react";
@@ -6,12 +6,10 @@ import { useSearchParams } from "next/navigation";
 
 export default function CompleteClient() {
   const sp = useSearchParams();
-
-  // PortOne v2 기준 쿼리
   const paymentId =
     sp.get("paymentId") ||
-    sp.get("merchant_uid") || // 구버전 대비
-    sp.get("imp_uid") ||      // 구버전 대비
+    sp.get("merchant_uid") ||
+    sp.get("imp_uid") ||
     "";
   const txId =
     sp.get("transactionId") ||

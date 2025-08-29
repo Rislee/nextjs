@@ -1,10 +1,8 @@
-// app/checkout/complete/page.tsx
-"use client";
-
+// app/checkout/complete/page.tsx  (✅ 서버 컴포넌트)
 import { Suspense } from "react";
 import CompleteClient from "./CompleteClient";
 
-// 동적 쿼리 의존 → 프리렌더 금지
+// 라우트 세그먼트 설정은 서버 파일에서만!
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
