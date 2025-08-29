@@ -1,51 +1,27 @@
-// app/auth/callback/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
-import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { cookies } from "next/headers";
+import { supabaseServer } from "@/lib/supabaseServer"; // 서버용 클라 (cookies 연동)
 
 export async function GET(req: NextRequest) {
-  const url = new URL(req.url);
-  const code = url.searchParams.get("code");
+  // 구글 → Supabase → 우리 서비스로 되돌아온 상태.
+  // Supabase 세션 쿠키가 있으면 getUser로 식별 가능.
   const supabase = supabaseServer();
+  const { data } = await supabase.auth.getUser();
+  const uid = data?.user?.id;
 
-  try {
-    if (code) {
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) throw error;
-    }
+  const isProd = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production";
+  const res = NextResponse.redirect(new URL("/checkout", req.url));
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user?.id) {
-      return NextResponse.redirect(new URL("/auth/sign-in?e=nouser", req.url));
-    }
-
-    const { data: existing } = await supabaseAdmin
-      .from("users")
-      .select("id")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    if (!existing) {
-      await supabaseAdmin.from("users").insert({ id: user.id, email: user.email ?? null });
-    }
-
-    // ✅ uid 쿠키 심기 (Next 15: cookies() async)
-    const res = NextResponse.redirect(new URL("/checkout", req.url));
-    const jar = await cookies();
-    jar.set("uid", user.id, {
-  httpOnly: true,
-  sameSite: "lax",
-  secure: false,         
-  path: "/",
-  maxAge: 60 * 60 * 24 * 365,
-});
-    return res;
-  } catch (e) {
-    return NextResponse.redirect(new URL("/auth/sign-in?e=callback", req.url));
+  if (uid) {
+    res.cookies.set({
+      name: "uid",
+      value: uid,
+      httpOnly: true,
+      sameSite: "lax",
+      secure: isProd,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+      ...(isProd ? { domain: ".inneros.co.kr" } : {}),
+    });
   }
+  return res;
 }
-
