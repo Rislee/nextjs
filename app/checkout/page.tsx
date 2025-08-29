@@ -1,11 +1,9 @@
-// app/checkout/page.tsx
 'use client';
 
 import { useState } from 'react';
-import { requestPortOnePayment } from '@/lib/portone/client';
+import { requestHectoCardPay } from '@/lib/portone/hecto';
 
 type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
-
 const PLAN_LABEL: Record<PlanId, string> = {
   START_OS: 'Start OS 결제',
   SIGNATURE_OS: 'Signature OS 결제',
@@ -23,55 +21,40 @@ export default function CheckoutPage() {
       credentials: 'include',
       body: JSON.stringify({ planId }),
     });
-
     const raw = await res.text();
     let json: any = null;
     try { json = raw ? JSON.parse(raw) : null; } catch {}
-
     if (!res.ok || !json?.ok) {
       const err = json?.error ?? `start ${res.status}${raw ? `: ${raw}` : ''}`;
       throw new Error(err);
     }
-    return json as {
-      ok: true;
-      merchantUid: string;
-      amount: number;
-      currency: string;
-      orderName: string;
-    };
+    return json as { ok: true; merchantUid: string; amount: number; orderName: string };
   }
 
   async function pay(planId: PlanId) {
     try {
-      setLoading(planId);
-      setMsg('');
+      setLoading(planId); setMsg('');
+      const { merchantUid, amount, orderName } = await startOrder(planId);
 
-      // 0) 세션 쿠키 보강(로그인 직후 안전망)
-      await fetch('/api/session/ensure', { method: 'POST', credentials: 'include' }).catch(() => {});
+      // TODO: 실제 사용자 정보 연결(헥토는 전화번호 필수)
+      const buyerTel = '010-0000-0000';
 
-      // 1) 서버에서 주문 생성
-      const { merchantUid, amount, currency, orderName } = await startOrder(planId);
-
-      // 2) PortOne 브라우저 SDK 호출 (명시적 전달)
-      await requestPortOnePayment({
-        planId,
-        paymentId:   merchantUid,
-        orderName:   orderName,
-        amount:      amount,                // ✅ RequestArgs.amount (totalAmount 아님)
-        currency:    (currency ?? 'KRW'),
-        redirectUrl: 'https://account.inneros.co.kr/checkout/complete',
-        env:         (process.env.NEXT_PUBLIC_PORTONE_ENV as 'sandbox' | 'production') || 'sandbox',
-        storeId:     process.env.NEXT_PUBLIC_PORTONE_STORE_ID!,                // ✅ 명시
-        channelKey:  process.env.NEXT_PUBLIC_PORTONE_CHANNEL_KEY || undefined, // (기본 채널 없으면 필수)
+      const rsp = await requestHectoCardPay({
+        merchantUid,
+        orderName,
+        amount,
+        buyer: { tel: buyerTel },
       });
 
-      // 이후 REDIRECTION or 폴백 리다이렉션으로 완료 페이지 이동
+      // 데스크탑 콜백 대비 완료 페이지로 이동
+      const u = new URL('/checkout/complete', location.origin);
+      u.searchParams.set('imp_uid', String(rsp.imp_uid || ''));
+      u.searchParams.set('merchant_uid', String(rsp.merchant_uid || merchantUid));
+      u.searchParams.set('success', 'true');
+      location.href = u.toString();
     } catch (e: any) {
       console.error(e);
       setMsg(e?.message ?? String(e));
-      if (String(e?.message || '').includes('unauthorized')) {
-        setMsg('로그인이 필요합니다. 다시 로그인 해주세요.');
-      }
     } finally {
       setLoading(null);
     }
