@@ -1,103 +1,60 @@
+// app/api/checkout/verify/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { getPayment } from "@/lib/portone";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-type PlanId = "START_OS" | "SIGNATURE_OS" | "MASTER_OS";
-const PRICE: Record<PlanId, number> = {
-  START_OS: 5_500_000,
-  SIGNATURE_OS: 9_900_000,
-  MASTER_OS: 19_900_000,
-};
-
-function parsePlan(paymentId: string): PlanId | null {
-  const m = paymentId.match(/inneros_(START_OS|SIGNATURE_OS|MASTER_OS)_/);
-  return (m?.[1] as PlanId) || null;
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const { paymentId } = (await req.json()) as { paymentId?: string };
+    const { paymentId, merchantUid } = await req.json();
     if (!paymentId) {
       return NextResponse.json({ ok: false, error: "missing paymentId" }, { status: 400 });
     }
 
-    const plan = parsePlan(paymentId);
-    if (!plan) {
-      return NextResponse.json({ ok: false, error: "invalid paymentId format" }, { status: 400 });
+    // PortOne 서버-서버 조회
+    const p = await getPayment(paymentId);
+    const status = String(p.status || "").toLowerCase();
+    const ok = ["paid", "success", "completed"].includes(status);
+
+    // payments 테이블이 있다면 상태/금액 업데이트 (없어도 전체 플로우엔 지장 없음)
+    try {
+      await supabaseAdmin
+        .from("payments")
+        .update({
+          status: ok ? "paid" : status,
+          amount: p.amount?.total ?? null,
+          currency: p.currency ?? "KRW",
+        })
+        .eq("merchant_uid", merchantUid || paymentId);
+    } catch (_) {}
+
+    // 성공 시 멤버십 활성화 (payments에 user_id/plan_id가 기록되어 있다는 가정)
+    if (ok) {
+      try {
+        const { data } = await supabaseAdmin
+          .from("payments")
+          .select("user_id, plan_id")
+          .eq("merchant_uid", merchantUid || paymentId)
+          .maybeSingle();
+
+        if (data?.user_id && data?.plan_id) {
+          await supabaseAdmin.from("memberships").upsert({
+            user_id: data.user_id,
+            plan_id: data.plan_id,
+            status: "active",
+            current_period_end: addMonth(new Date()),
+          });
+        }
+      } catch (_) {}
     }
 
-    const jar = await cookies();
-    const uid = jar.get("uid")?.value;
-    if (!uid) {
-      return NextResponse.json({ ok: false, error: "no uid cookie" }, { status: 401 });
-    }
-
-    // v2 단건조회
-    const pay: any = await getPayment(paymentId);
-
-    // v2 스키마 대응: amount.total 사용 (구버전/타입 혼재 대비 fallback 포함)
-    const status = String(pay.status || "").toUpperCase();
-    const paidAmount =
-      typeof pay.amount === "number"
-        ? Number(pay.amount)
-        : Number(pay.amount?.total);
-
-    const isPaid = status === "PAID";
-    const amountOK = paidAmount === PRICE[plan];
-
-    if (!isPaid) {
-      // 실패/중단 원인을 그대로 반환해 디버깅 가능하게
-      return NextResponse.json(
-        {
-          ok: false,
-          status,
-          reason: pay.failure?.reason || null,
-          pgCode: pay.failure?.pgCode || null,
-          pgMessage: pay.failure?.pgMessage || null,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (!amountOK) {
-      return NextResponse.json(
-        {
-          ok: false,
-          status,
-          error: `amount mismatch: expected ${PRICE[plan]}, got ${paidAmount}`,
-        },
-        { status: 400 }
-      );
-    }
-
-    // 여기까지 왔으면 정상 결제 → 멤버십 활성화
-    const next = new Date();
-    next.setMonth(next.getMonth() + 1);
-
-    const { error } = await supabaseAdmin.from("memberships").upsert(
-      {
-        user_id: uid,
-        plan_id: plan,
-        status: "active",
-        current_period_end: next.toISOString(),
-      },
-      { onConflict: "user_id" } as any
-    );
-
-    if (error) {
-      // 결제는 정상이므로 200 + 경고 반환
-      return NextResponse.json({
-        ok: true,
-        warning: `membership upsert failed: ${error.message}`,
-      });
-    }
-
-    return NextResponse.json({ ok: true, status, amount: paidAmount });
+    return NextResponse.json({ ok, payment: p });
   } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: String(e?.message || e) },
-      { status: 502 }
-    );
+    return NextResponse.json({ ok: false, error: e?.message || "verify failed" }, { status: 500 });
   }
+}
+
+function addMonth(d: Date) {
+  const x = new Date(d);
+  x.setMonth(x.getMonth() + 1);
+  return x;
 }

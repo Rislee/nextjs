@@ -1,43 +1,58 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { supabaseAdmin } from '@/lib/supabaseAdmin';
-import { getPayment } from '@/lib/portone/server'; // 앞서 만든 server.ts
+// app/checkout/complete/CompleteClient.tsx
+"use client";
 
-export async function POST(req: NextRequest) {
-  try {
-    const { paymentId } = await req.json();
-    if (!paymentId) return NextResponse.json({ ok:false, error:'missing paymentId' }, { status:400 });
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
-    const pay = await getPayment(paymentId);
-    // 예: 상태/금액 검증
-    if (pay.status !== 'PAID') return NextResponse.json({ ok:false, error:`status ${pay.status}` }, { status:400 });
+export default function CompleteClient() {
+  const sp = useSearchParams();
 
-    // 주문 조회
-    const { data: order } = await supabaseAdmin
-      .from('orders')
-      .select('id,user_id,plan_id,amount,currency,status')
-      .eq('merchant_uid', paymentId)
-      .maybeSingle();
+  // PortOne v2 기준 쿼리
+  const paymentId =
+    sp.get("paymentId") ||
+    sp.get("merchant_uid") || // 구버전 대비
+    sp.get("imp_uid") ||      // 구버전 대비
+    "";
+  const txId =
+    sp.get("transactionId") ||
+    sp.get("txId") ||
+    sp.get("txid") ||
+    "";
+  const success = sp.get("success");
 
-    if (!order) return NextResponse.json({ ok:false, error:'order not found' }, { status:404 });
-    if (order.amount !== pay.amount || order.currency !== pay.currency)
-      return NextResponse.json({ ok:false, error:'amount/currency mismatch' }, { status:400 });
+  const [msg, setMsg] = useState("");
+  const [verify, setVerify] = useState<any>(null);
 
-    // 주문 결제완료
-    await supabaseAdmin.from('orders')
-      .update({ status:'paid' })
-      .eq('id', order.id);
+  useEffect(() => {
+    (async () => {
+      if (!paymentId) {
+        setMsg("paymentId 없음");
+        return;
+      }
+      try {
+        const r = await fetch("/api/checkout/verify", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ paymentId, merchantUid: paymentId }),
+        });
+        const j = await r.json();
+        setVerify(j);
+        if (!j.ok) setMsg(j.error || "검증 실패");
+      } catch (e: any) {
+        setMsg(e?.message || "검증 요청 실패");
+      }
+    })();
+  }, [paymentId]);
 
-    // 멤버십 활성화
-    await supabaseAdmin.from('memberships')
-      .upsert({
-        user_id: order.user_id,
-        plan: order.plan_id,
-        status: 'active',
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' });
+  return (
+    <main style={{ padding: 24 }}>
+      <h1>결제 완료</h1>
+      <p>paymentId: {paymentId || "-"}</p>
+      <p>txId: {txId || "-"}</p>
+      <p>success: {String(success ?? "-")}</p>
 
-    return NextResponse.json({ ok:true });
-  } catch (e:any) {
-    return NextResponse.json({ ok:false, error:e?.message ?? 'unknown' }, { status:500 });
-  }
+      {msg && <p style={{ color: "limegreen" }}>검증 실패: {msg}</p>}
+      {verify?.ok && <p style={{ color: "dodgerblue" }}>검증 OK</p>}
+    </main>
+  );
 }
