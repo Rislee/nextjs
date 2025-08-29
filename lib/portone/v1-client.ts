@@ -5,15 +5,15 @@ type PayArgs = {
   merchant_uid: string;
   name: string;
   amount: number;
-  redirectUrl: string; // 모바일용 리다이렉트
+  redirectUrl: string; // 모바일 완료 후 이동
 };
 
 export async function requestIamportPay({ merchant_uid, name, amount, redirectUrl }: PayArgs) {
-  const IMP = window.IMP;
+  const IMP = (typeof window !== 'undefined') ? window.IMP : undefined;
   if (!IMP) throw new Error('IMP SDK not loaded');
 
-  const impCode = process.env.NEXT_PUBLIC_IAMAP_CODE!;
-  if (!impCode) throw new Error('Missing NEXT_PUBLIC_IAMAP_CODE');
+  const impCode = process.env.NEXT_PUBLIC_IMP_CODE || process.env.NEXT_PUBLIC_IAMPORT_CODE;
+  if (!impCode) throw new Error('Missing NEXT_PUBLIC_IMP_CODE');
 
   IMP.init(impCode);
 
@@ -28,8 +28,8 @@ export async function requestIamportPay({ merchant_uid, name, amount, redirectUr
         m_redirect_url: redirectUrl, // 모바일에서 완료 후 이동
       },
       (rsp: any) => {
-        if (rsp.success) resolve();
-        else reject(new Error(rsp.error_msg || 'pay_failed'));
+        if (rsp && rsp.success) resolve();
+        else reject(new Error((rsp && rsp.error_msg) || 'pay_failed'));
       }
     );
   });

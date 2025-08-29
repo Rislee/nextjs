@@ -12,73 +12,69 @@ export default function CheckoutPlanPage() {
   const router = useRouter();
 
   const planId = useMemo<PlanId | null>(() => {
-    const p = (params?.plan || '').toUpperCase();
-    return (['START_OS', 'SIGNATURE_OS', 'MASTER_OS'] as const).includes(p as any)
-      ? (p as PlanId)
-      : null;
+    const p = String(params?.plan || '').toUpperCase();
+    return (['START_OS', 'SIGNATURE_OS', 'MASTER_OS'] as const).includes(p as any) ? (p as PlanId) : null;
   }, [params?.plan]);
 
-  const [msg, setMsg] = useState('결제 진행');
-  const [submsg, setSubmsg] = useState('플랜 결제를 준비하고 있어요…');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
       if (!planId) {
-        setMsg('오류');
-        setSubmsg('잘못된 플랜입니다.');
+        setError('잘못된 플랜입니다.');
         return;
       }
-
       try {
-        // 1) 주문 생성 (POST 필수, uid 쿠키 포함)
+        setLoading(true);
         const res = await fetch('/api/checkout/start', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          cache: 'no-store',
           body: JSON.stringify({ planId }),
         });
-
-        const raw = await res.text();
-        let json: any = null;
-        try { json = raw ? JSON.parse(raw) : null; } catch {}
-
+        const json = await res.json();
         if (!res.ok || !json?.ok) {
-          const err = json?.error ?? `start ${res.status}${raw ? `: ${raw}` : ''}`;
-          throw new Error(err);
+          throw new Error(json?.error || 'checkout_start_failed');
         }
+        const { merchantUid, amount, orderName } = json as { merchantUid: string; amount: number; orderName: string };
 
-        const { merchantUid, amount, orderName } = json as {
-          ok: true; merchantUid: string; amount: number; orderName: string;
-        };
-
-        // 2) PortOne v1 (아임포트) 결제창 호출
         const redirectUrl =
           process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL ||
           'https://account.inneros.co.kr/checkout/complete';
 
         await requestIamportPay({
           merchant_uid: merchantUid,
-          name:        orderName,
-          amount:      amount,
-          redirectUrl, // 모바일 완료 후 이동
+          name: orderName,
+          amount,
+          redirectUrl,
         });
 
-        // 결제 완료 시 redirectUrl로 이동함 (모바일/일부 환경)
+        // PC 환경에서는 콜백이 여기로 돌아오므로 완료 페이지로 픽스드 이동
+        const u = new URL(redirectUrl);
+        u.searchParams.set('imp_uid', '');
+        u.searchParams.set('merchant_uid', merchantUid);
+        u.searchParams.set('success', 'true');
+        router.replace(u.toString());
       } catch (e: any) {
         console.error(e);
-        setMsg('오류');
-        setSubmsg(String(e?.message ?? e));
-        if (String(e?.message || '').includes('unauthorized')) {
-          router.replace(`/auth/sign-in?next=/checkout/${planId}`);
-        }
+        setError(e?.message ?? String(e));
+      } finally {
+        setLoading(false);
       }
     })();
   }, [planId, router]);
 
+  if (!planId) {
+    return <main className="mx-auto max-w-xl p-6">잘못된 경로입니다.</main>;
+  }
+
   return (
     <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-xl font-semibold">{msg}</h1>
-      <p className="mt-2 text-sm text-gray-600">{submsg}</p>
+      <h1 className="text-xl font-semibold">결제 준비 중…</h1>
+      <p className="mt-2 text-sm text-gray-600">플랜: <strong>{planId}</strong></p>
+      {loading && <p className="mt-4 text-sm">결제창을 여는 중…</p>}
+      {error && <p className="mt-4 text-sm text-red-600">오류: {error}</p>}
     </main>
   );
 }

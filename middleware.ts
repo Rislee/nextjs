@@ -7,7 +7,7 @@ type Plan = (typeof PLAN_ORDER)[number];
 type Status = "active" | "past_due" | "canceled" | "none";
 
 function toPlan(p: string | null | undefined): Plan {
-  return (PLAN_ORDER as readonly string[]).includes(p as string)
+  return (PLAN_ORDER as readonly string[]).includes((p || "") as any)
     ? (p as Plan)
     : "FREE";
 }
@@ -16,43 +16,40 @@ function hasAccess(userPlan: Plan, required: Plan) {
 }
 
 export async function middleware(req: NextRequest) {
-  const { pathname, origin } = req.nextUrl;
+  const { pathname } = req.nextUrl;
 
-  // ✅ /api, 정적 리소스 우회 (웹훅 포함)
-  if (
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/_next") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/robots.txt" ||
-    pathname === "/sitemap.xml"
-  ) {
-    return NextResponse.next();
-  }
+  const guard = [
+    { prefix: "/start",     required: "START_OS" as Plan },
+    { prefix: "/signature", required: "SIGNATURE_OS" as Plan },
+    { prefix: "/master",    required: "MASTER_OS" as Plan },
+  ].find(g => pathname.startsWith(g.prefix));
 
-  // ✅ 페이지 가드
-  const guards = [
-    { pattern: /^\/start(\/|$)/,     required: "START_OS" as const },
-    { pattern: /^\/signature(\/|$)/, required: "SIGNATURE_OS" as const },
-    { pattern: /^\/master(\/|$)/,    required: "MASTER_OS" as const },
-  ] as const;
-
-  const guard = guards.find((g) => g.pattern.test(pathname));
   if (!guard) return NextResponse.next();
 
-  // ✅ uid 쿠키로 로그인 판별
-  const uid = req.cookies.get("uid")?.value;
+  // uid 쿠키가 없으면 로그인으로
+  const uid = req.cookies.get("uid")?.value || "";
   if (!uid) {
-    return NextResponse.redirect(new URL("/signin", req.url));
+    const url = new URL("/auth/sign-in", req.url);
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
   }
 
-  // ✅ 동일 오리진으로 status 조회 (쿠키 전달)
-  const res = await fetch(`${origin}/api/membership/status`, {
-    headers: { Cookie: req.headers.get("cookie") || "" },
+  const statusUrl = new URL("/api/membership/status", req.url);
+  statusUrl.searchParams.set("userId", uid);
+
+  const res = await fetch(statusUrl.toString(), {
+    method: "GET",
+    headers: {
+      "x-internal-key": process.env.INTERNAL_API_KEY || "",
+      cookie: req.headers.get("cookie") || "",
+    },
     cache: "no-store",
   });
 
   if (!res.ok) {
-    return NextResponse.redirect(new URL("/signin", req.url));
+    const url = new URL("/auth/sign-in", req.url);
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
   }
 
   const json = (await res.json()) as { plan?: string; status?: string };

@@ -15,34 +15,37 @@ const PRICE: Record<PlanId, number> = {
   MASTER_OS: 22000000,
 };
 
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => ({}));
-  const planId = body?.planId as PlanId | undefined;
+function orderNameFor(planId: PlanId) {
+  return `InnerOS ${planId.replace('_', ' ')}`;
+}
 
+export async function POST(req: Request) {
+  const { planId }: { planId?: PlanId } = await req.json().catch(() => ({}));
   if (!planId || !(planId in PRICE)) {
     return NextResponse.json({ ok: false, error: 'invalid_plan' }, { status: 400 });
   }
 
-  const ck = await cookies();
-  const uid = ck.get('uid')?.value;
+  // 쿠키에서 uid 확인
+  const jar = await cookies();
+  const uid = jar.get('uid')?.value;
   if (!uid) {
     return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
   }
 
-  const amount = PRICE[planId];
-  const orderName = `InnerOS ${planId.replace('_', ' ')}`;
   const merchantUid = `inneros_${planId}_${Date.now()}`;
+  const amount = PRICE[planId];
+  const orderName = orderNameFor(planId);
 
-  // payments 레코드 생성
+  // payments pending 행 삽입
   const ins = await supabaseAdmin
     .from('payments')
     .insert({
       user_id: uid,
       plan_id: planId,
       merchant_uid: merchantUid,
+      status: 'pending',
       amount,
       currency: 'KRW',
-      status: 'pending',
     })
     .select('merchant_uid')
     .maybeSingle();
