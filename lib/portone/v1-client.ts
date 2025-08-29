@@ -12,8 +12,8 @@ export async function requestIamportPay({ merchant_uid, name, amount, redirectUr
   const IMP = window.IMP;
   if (!IMP) throw new Error('IMP SDK not loaded');
 
-  const impCode = process.env.NEXT_PUBLIC_IMP_CODE!;
-  if (!impCode) throw new Error('Missing NEXT_PUBLIC_IMP_CODE');
+  const impCode = process.env.NEXT_PUBLIC_IAMAP_CODE!;
+  if (!impCode) throw new Error('Missing NEXT_PUBLIC_IAMAP_CODE');
 
   IMP.init(impCode);
 

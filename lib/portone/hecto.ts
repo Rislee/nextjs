@@ -28,7 +28,7 @@ export async function requestHectoCardPay(args: {
 }) {
   await loadIamport();
   const IMP = window.IMP!;
-  IMP.init(process.env.NEXT_PUBLIC_IMP_CODE); // impXXXXXXXX
+  IMP.init(process.env.NEXT_PUBLIC_IAMAP_CODE); // impXXXXXXXX
 
   return new Promise<any>((resolve, reject) => {
     IMP.request_pay(
