@@ -14,10 +14,7 @@ function pick(obj: any, ...keys: string[]) {
 }
 
 export async function GET() {
-  return new Response(JSON.stringify({ ok: true, method: "GET" }), {
-    status: 200,
-    headers: { "content-type": "application/json" },
-  });
+  return json({ ok: true, method: "GET" }, 200);
 }
 
 export async function POST(req: Request) {
@@ -33,17 +30,14 @@ export async function POST(req: Request) {
   const merchantUid: string | undefined =
     pick(d, "paymentId", "id", "merchantUid", "merchant_uid");
 
-  if (!merchantUid) {
-    return json({ ok: false, error: "missing_paymentId" }, 400);
-  }
+  if (!merchantUid) return json({ ok: false, error: "missing_paymentId" }, 400);
 
   const statusRaw = String(pick(d, "status", "paymentStatus") ?? "").toLowerCase();
   const amountObj = pick(d, "amount");
-  const amountTotalRaw: any = amountObj?.total ?? amountObj ?? null;
-  const amountTotal =
-    typeof amountTotalRaw === "number" ? amountTotalRaw :
-    typeof amountTotalRaw === "string" ? Number(amountTotalRaw) :
-    null;
+  const amountRaw: any = amountObj?.total ?? amountObj ?? null;
+  const amount =
+    typeof amountRaw === "number" ? amountRaw :
+    typeof amountRaw === "string" ? Number(amountRaw) : null;
 
   const currency: string = String(pick(d, "currency") ?? "KRW");
   const transactionId: string | undefined = pick(d, "transactionId", "txId", "txid");
@@ -59,41 +53,38 @@ export async function POST(req: Request) {
     .eq("merchant_uid", merchantUid)
     .maybeSingle();
 
-  if (sel.error) {
-    return json({ ok: false, step: "select", error: "select_failed", detail: sel.error }, 500);
-  }
-  if (!sel.data) {
-    return json({ ok: false, error: "payment_not_found", merchantUid }, 404);
-  }
+  if (sel.error) return json({ ok: false, step: "select", error: "select_failed", detail: sel.error }, 500);
+  if (!sel.data) return json({ ok: false, error: "payment_not_found", merchantUid }, 404);
 
   const payRow: any = sel.data;
 
-  // 2) payments 업데이트
-  const upd = {
+  // 2) payments 업데이트 (⚠ amount_total 대신 amount 사용)
+  const upd: Record<string, any> = {
     status: mappedStatus,
     portone_payment_id: merchantUid,
     portone_transaction_id: transactionId ?? null,
-    amount_total: amountTotal ?? payRow.amount_total ?? null,
     currency,
     failure,
     updated_at: new Date().toISOString(),
   };
+  if (typeof amount === "number") {
+    upd.amount = amount;                 // ← 여기!
+  } else if (payRow.amount != null) {
+    upd.amount = payRow.amount;          // 기존 값 유지
+  }
 
   const up = await supabaseAdmin
     .from("payments")
     .update(upd)
     .eq("merchant_uid", merchantUid);
 
-  if (up.error) {
-    return json({ ok: false, step: "payments.update", error: "update_failed", detail: up.error }, 500);
-  }
+  if (up.error) return json({ ok: false, step: "payments.update", error: "update_failed", detail: up.error }, 500);
 
-  // 3) memberships 활성화 (paid일 때만)
+  // 3) memberships 활성화 (paid일 때만) — update → 없으면 insert
   let membershipUpserted = false;
   if (OK.has(statusRaw)) {
     const { user_id, plan_id } = payRow;
     if (user_id && plan_id) {
-      // 먼저 update 시도 → 없으면 insert
       const up1 = await supabaseAdmin
         .from("memberships")
         .update({
@@ -103,13 +94,10 @@ export async function POST(req: Request) {
         })
         .eq("user_id", user_id);
 
-      if (up1.error) {
-        return json({ ok: false, step: "memberships.update", error: "update_failed", detail: up1.error }, 500);
-      }
+      if (up1.error) return json({ ok: false, step: "memberships.update", error: "update_failed", detail: up1.error }, 500);
 
-      if (up1.count === 0) {
-        // count를 보려면 .select()가 필요하지만 postgrest-js v1에서는 update count 반환이 제한적.
-        // 안전하게 한번 더 조회해서 없으면 insert
+      // 없으면 insert
+      if ((up1 as any).count === 0) {
         const chk = await supabaseAdmin
           .from("memberships")
           .select("user_id")
@@ -125,9 +113,7 @@ export async function POST(req: Request) {
               status: "active",
               updated_at: new Date().toISOString(),
             });
-          if (ins.error) {
-            return json({ ok: false, step: "memberships.insert", error: "insert_failed", detail: ins.error }, 500);
-          }
+          if (ins.error) return json({ ok: false, step: "memberships.insert", error: "insert_failed", detail: ins.error }, 500);
         }
       }
 
