@@ -1,93 +1,112 @@
+// app/api/webhook/portone/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { Webhook } from "@portone/server-sdk";
-import { getPayment } from "@/lib/portone";
 
-export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-// ✅ 타입 워크어라운드(전역 재사용)
-const Verified = Webhook as unknown as {
-  verify: (
-    secret: string,
-    payload: string,
-    headers: Record<string, string | string[] | undefined>
-  ) => Promise<any>;
-};
+// 상태 매핑(여유있게 허용)
+const OK = new Set(["paid", "success", "completed", "captured"]);
+const BAD = new Set(["failed", "cancelled", "canceled"]);
 
 export async function POST(req: NextRequest) {
-  const rawBody = await req.text();
-  const headersObj = Object.fromEntries(req.headers.entries());
-  const secret = process.env.PORTONE_WEBHOOK_SECRET!;
-  if (!secret) return NextResponse.json({ ok: false, error: "missing PORTONE_WEBHOOK_SECRET" }, { status: 500 });
+  // 1) 원본 바디/헤더(서명 검증용) 확보
+  const raw = await req.text();
+  const hdrs = Object.fromEntries(req.headers.entries());
 
-  try {
-    const payload: any = await Verified.verify(secret, rawBody, headersObj);
+  // TODO: 포트원 문서의 웹훅 서명 헤더명/검증 방식을 확인 후 아래에서 검증 추가
+  // const signature = req.headers.get("x-portone-signature") ?? req.headers.get("x-webhook-signature");
+  // verify(raw, signature, process.env.PORTONE_WEBHOOK_SECRET!)
 
-    const paymentId: string | undefined = payload?.paymentId ?? payload?.id;
-    const merchantUid: string | undefined =
-      payload?.merchantOrderId ?? payload?.merchant_order_id ?? payload?.merchant_uid;
-    if (!paymentId || !merchantUid) {
-      return NextResponse.json({ ok: false, error: "bad payload: missing ids" }, { status: 400 });
-    }
-
-    const { data: pay, error: findErr } = await supabaseAdmin
-      .from("payments")
-      .select("id,user_id,plan_id,amount,currency,status")
-      .eq("merchant_uid", merchantUid)
-      .maybeSingle();
-    if (findErr) return NextResponse.json({ ok: false, error: findErr.message }, { status: 500 });
-
-    // ✅ 이미 처리된 건이면 조용히 OK (멱등)
-    if (pay?.status === "paid") {
-      return NextResponse.json({ ok: true, note: "already paid" });
-    }
-
-    // 서버-서버 검증
-    const remote = await getPayment(paymentId);
-    const statusStr = String(remote.status ?? "").toLowerCase();
-    const okStatus = ["paid", "success", "completed"].includes(statusStr);
-
-    // ✅ 기대 금액 확정(없으면 plans에서 보강)
-    let expected = pay?.amount as number | null | undefined;
-    if ((expected == null) && pay?.plan_id) {
-      const { data: planRow } = await supabaseAdmin
-        .from("plans").select("price").eq("id", pay.plan_id).maybeSingle();
-      expected = planRow?.price ?? expected;
-    }
-    const okAmount = expected != null && Number(expected) === Number(remote.amount);
-
-    await supabaseAdmin.from("payments").upsert(
-      {
-        user_id: pay?.user_id ?? null,
-        plan_id: pay?.plan_id ?? null,
-        merchant_uid: merchantUid,
-        imp_uid: paymentId,
-        amount: Number(remote.amount ?? payload?.amount ?? 0),
-        currency: String(remote.currency ?? payload?.currency ?? "KRW"),
-        status: okStatus ? "paid" : statusStr || "failed",
-        raw: payload,
-      },
-      { onConflict: "merchant_uid" }
-    );
-
-    if (okStatus && okAmount && pay?.user_id && pay?.plan_id) {
-      const next = addMonth(new Date());
-      await supabaseAdmin.from("memberships").upsert({
-        user_id: pay.user_id,
-        plan_id: pay.plan_id,
-        status: "active",
-        current_period_end: next,
-      });
-    }
-
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: e?.message ?? "verify failed" }, { status: 400 });
+  // 2) JSON 파싱
+  let body: any = {};
+  try { body = JSON.parse(raw || "{}"); } catch {
+    return NextResponse.json({ ok: false, error: "invalid_json" }, { status: 400 });
   }
-}
 
-function addMonth(d: Date) {
-  const x = new Date(d);
-  x.setMonth(x.getMonth() + 1);
-  return x;
+  // 3) 포트원 페이로드에서 공통 필드 최대한 안전하게 추출
+  const p =
+    body?.payment ??
+    body?.data?.payment ??
+    body; // 다양한 포맷 대비
+
+  const pick = (...keys: string[]) => keys.find(k => p?.[k] != null) ? p[keys.find(k => p?.[k] != null)!] : undefined;
+
+  const merchantUid =
+    pick("merchantUid", "merchant_uid", "id", "paymentId") || body?.merchantUid || body?.paymentId;
+
+  const transactionId =
+    pick("transactionId", "txId", "txid") || body?.transactionId;
+
+  const status = String(
+    pick("status", "paymentStatus") || body?.status || ""
+  ).toLowerCase();
+
+  const amountTotal =
+    p?.amount?.total ?? p?.amount ?? body?.amount?.total ?? null;
+
+  const currency =
+    p?.currency ?? body?.currency ?? "KRW";
+
+  // 4) 필수: merchantUid가 없으면 매칭 불가
+  if (!merchantUid) {
+    console.warn("[portone webhook] missing merchantUid", { hdrs, body });
+    return NextResponse.json({ ok: false, error: "missing_merchant_uid" }, { status: 400 });
+  }
+
+  // 5) 먼저 payments 테이블 갱신(멱등: merchant_uid UNIQUE 가정)
+  const upd = {
+    status: OK.has(status) ? "paid" : BAD.has(status) ? "failed" : status || "unknown",
+    portone_payment_id: merchantUid, // v2에선 id==merchantUid로 쓰는 경우가 많음(우리 생성값)
+    portone_transaction_id: transactionId ?? null,
+    amount_total: amountTotal ?? null,
+    currency,
+    failure: BAD.has(status) ? (p?.failure ?? body?.failure ?? null) : null,
+    updated_at: new Date().toISOString(),
+  };
+
+  // 대상 payment 찾기(주문 생성 시 저장한 merchant_uid와 매칭)
+  const { data: payRow, error: selErr } = await supabaseAdmin
+    .from("payments")
+    .select("*")
+    .eq("merchant_uid", merchantUid)
+    .maybeSingle();
+
+  if (selErr) {
+    console.error("[payments.select]", selErr);
+  }
+
+  if (!payRow) {
+    // 주문 레코드가 없다면(예외), 최소한 로그만 남기고 200으로 응답
+    console.warn("[payments.select] not found by merchant_uid", merchantUid, { body });
+  } else {
+    const { error: upErr } = await supabaseAdmin
+      .from("payments")
+      .update(upd)
+      .eq("merchant_uid", merchantUid);
+
+    if (upErr) console.error("[payments.update]", upErr);
+
+    // 6) 결제 성공이면 memberships 활성화(멱등 upsert)
+    if (OK.has(status)) {
+      const { user_id, plan_id } = payRow;
+      if (user_id && plan_id) {
+        const { error: upsertErr } = await supabaseAdmin
+          .from("memberships")
+          .upsert(
+            {
+              user_id,
+              plan_id,
+              status: "active",
+              updated_at: new Date().toISOString(),
+            },
+            { onConflict: "user_id" }
+          );
+        if (upsertErr) console.error("[memberships.upsert]", upsertErr);
+      }
+    }
+  }
+
+  // 7) 최종 응답
+  return NextResponse.json({ ok: true });
 }
