@@ -16,9 +16,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ko">
       <body>
+        {/* ... 기존 레이아웃 ... */}
+
+        {/* ✅ 아임포트 SDK 로드 */}
+        <Script
+          src="https://cdn.iamport.kr/v1/iamport.js"
+          strategy="afterInteractive"
+        />
         {children}
-        {/* PortOne SDK는 결제 버튼 클릭 전에 반드시 준비되어야 하므로 beforeInteractive가 안전 */}
-        <Script src="https://cdn.portone.io/v2/browser-sdk.js" strategy="beforeInteractive" />
       </body>
     </html>
   );
