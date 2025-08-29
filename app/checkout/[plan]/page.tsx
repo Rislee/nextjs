@@ -1,80 +1,74 @@
 // app/checkout/[plan]/page.tsx
-'use client';
+"use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { requestIamportPay } from '@/lib/portone/v1-client';
+import { useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { requestIamportPay } from "@/lib/portone/v1-client";
 
-type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
+type PlanId = "START_OS" | "SIGNATURE_OS" | "MASTER_OS";
 
 export default function CheckoutPlanPage() {
-  const params = useParams<{ plan: string }>();
+  const { plan } = useParams<{ plan: PlanId }>();
   const router = useRouter();
-
-  const planId = useMemo<PlanId | null>(() => {
-    const p = String(params?.plan || '').toUpperCase();
-    return (['START_OS', 'SIGNATURE_OS', 'MASTER_OS'] as const).includes(p as any) ? (p as PlanId) : null;
-  }, [params?.plan]);
-
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      if (!planId) {
-        setError('잘못된 플랜입니다.');
+      // 1) 세션/uid 쿠키 보정
+      const ensure = await fetch("/api/session/ensure", {
+        method: "GET",
+        credentials: "include",
+      });
+      if (cancelled) return;
+      if (ensure.status === 401) {
+        const next = encodeURIComponent(`/checkout/${plan}`);
+        router.replace(`/auth/sign-in?next=${next}`);
         return;
       }
-      try {
-        setLoading(true);
-        const res = await fetch('/api/checkout/start', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          cache: 'no-store',
-          body: JSON.stringify({ planId }),
-        });
-        const json = await res.json();
-        if (!res.ok || !json?.ok) {
-          throw new Error(json?.error || 'checkout_start_failed');
-        }
-        const { merchantUid, amount, orderName } = json as { merchantUid: string; amount: number; orderName: string };
-
-        const redirectUrl =
-          process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL ||
-          'https://account.inneros.co.kr/checkout/complete';
-
-        await requestIamportPay({
-          merchant_uid: merchantUid,
-          name: orderName,
-          amount,
-          redirectUrl,
-        });
-
-        // PC 환경에서는 콜백이 여기로 돌아오므로 완료 페이지로 픽스드 이동
-        const u = new URL(redirectUrl);
-        u.searchParams.set('imp_uid', '');
-        u.searchParams.set('merchant_uid', merchantUid);
-        u.searchParams.set('success', 'true');
-        router.replace(u.toString());
-      } catch (e: any) {
-        console.error(e);
-        setError(e?.message ?? String(e));
-      } finally {
-        setLoading(false);
-      }
+      setReady(true);
     })();
-  }, [planId, router]);
+    return () => {
+      cancelled = true;
+    };
+  }, [plan, router]);
 
-  if (!planId) {
-    return <main className="mx-auto max-w-xl p-6">잘못된 경로입니다.</main>;
-  }
+  useEffect(() => {
+    if (!ready) return;
+    let cancelled = false;
 
-  return (
-    <main className="mx-auto max-w-xl p-6">
-      <h1 className="text-xl font-semibold">결제 준비 중…</h1>
-      <p className="mt-2 text-sm text-gray-600">플랜: <strong>{planId}</strong></p>
-      {loading && <p className="mt-4 text-sm">결제창을 여는 중…</p>}
-      {error && <p className="mt-4 text-sm text-red-600">오류: {error}</p>}
-    </main>
-  );
+    (async () => {
+      // 2) 주문 생성
+      const res = await fetch("/api/checkout/start", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ planId: plan }),
+      });
+
+      if (cancelled) return;
+
+      if (!res.ok) {
+        console.error("failed to start checkout", await res.text());
+        alert("주문 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
+        return;
+      }
+
+      const { merchantUid, amount, orderName } = await res.json();
+
+      // 3) 아임포트 v1 결제 호출
+      await requestIamportPay({
+        merchant_uid: merchantUid,
+        amount,
+        name: orderName,
+      });
+      // PC에선 콜백에서 완료 페이지로 이동, 모바일은 m_redirect_url로 이동
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, plan]);
+
+  return null; // 필요하면 로딩 UI 구성
 }

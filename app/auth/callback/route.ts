@@ -1,6 +1,6 @@
 // app/auth/callback/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabaseServer";
+import { createServerClient } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,20 +9,38 @@ export const revalidate = 0;
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const next = url.searchParams.get("next") || "/checkout";
-  const code = url.searchParams.get("code") || "";   // ✅ OAuth code
+  const code = url.searchParams.get("code") || "";
 
-  const supabase = supabaseServer();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return req.cookies.get(name)?.value;
+        },
+        set() {
+          /* no-op: we set our own cookies via NextResponse below */
+        },
+        remove() {
+          /* no-op */
+        },
+      },
+    }
+  );
 
-  // ✅ 1) OAuth code → 서버 세션으로 교환 (쿠키에 세션 심어줌)
   if (code) {
-    await supabase.auth.exchangeCodeForSession(code);
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) {
+      return NextResponse.redirect(
+        new URL(`/auth/sign-in?error=exchange_failed`, url.origin)
+      );
+    }
   }
 
-  // ✅ 2) 이제 서버가 사용자 조회 가능
   const { data } = await supabase.auth.getUser();
   const uid = data?.user?.id;
 
-  // ✅ 3) uid HttpOnly 쿠키 굽기
   const isProd =
     process.env.VERCEL_ENV === "production" ||
     process.env.NODE_ENV === "production";
@@ -37,8 +55,8 @@ export async function GET(req: NextRequest) {
       sameSite: "lax",
       secure: isProd,
       path: "/",
-      maxAge: 60 * 60 * 24 * 30,
-      ...(isProd ? { domain: ".inneros.co.kr" } : {}), // prod에서만 도메인 고정
+      maxAge: 60 * 60 * 24 * 30, // 30 days
+      ...(isProd ? { domain: ".inneros.co.kr" } : {}),
     });
   }
 
