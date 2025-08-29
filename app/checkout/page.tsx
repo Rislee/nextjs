@@ -20,7 +20,7 @@ export default function CheckoutPage() {
     const res = await fetch('/api/checkout/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      credentials: 'include', // 🔒 uid 쿠키 포함
+      credentials: 'include',
       body: JSON.stringify({ planId }),
     });
 
