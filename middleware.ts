@@ -16,32 +16,41 @@ function hasAccess(userPlan: Plan, required: Plan) {
 }
 
 export async function middleware(req: NextRequest) {
-  const { pathname } = req.nextUrl;
+  const { pathname, origin } = req.nextUrl;
 
-  // ✅ /api 전부 우회 (웹훅 포함)
-  if (pathname.startsWith("/api")) {
+  // ✅ /api, 정적 리소스 우회 (웹훅 포함)
+  if (
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml"
+  ) {
     return NextResponse.next();
   }
 
-  // ✅ 페이지 가드 (원래 로직 유지)
+  // ✅ 페이지 가드
   const guards = [
     { pattern: /^\/start(\/|$)/,     required: "START_OS" as const },
     { pattern: /^\/signature(\/|$)/, required: "SIGNATURE_OS" as const },
     { pattern: /^\/master(\/|$)/,    required: "MASTER_OS" as const },
   ] as const;
 
-  const guard = guards.find(g => g.pattern.test(pathname));
+  const guard = guards.find((g) => g.pattern.test(pathname));
   if (!guard) return NextResponse.next();
 
-  const userId = req.headers.get("x-user-id");
-  if (!userId) {
+  // ✅ uid 쿠키로 로그인 판별
+  const uid = req.cookies.get("uid")?.value;
+  if (!uid) {
     return NextResponse.redirect(new URL("/signin", req.url));
   }
 
-  const res = await fetch(
-    `${process.env.SITE_URL}/api/membership/status?userId=${encodeURIComponent(userId)}`,
-    { headers: { "x-internal-key": process.env.INTERNAL_API_KEY ?? "" }, cache: "no-store" }
-  );
+  // ✅ 동일 오리진으로 status 조회 (쿠키 전달)
+  const res = await fetch(`${origin}/api/membership/status`, {
+    headers: { Cookie: req.headers.get("cookie") || "" },
+    cache: "no-store",
+  });
+
   if (!res.ok) {
     return NextResponse.redirect(new URL("/signin", req.url));
   }
@@ -54,16 +63,17 @@ export async function middleware(req: NextRequest) {
   if (!allowed) {
     return NextResponse.redirect(new URL("/upgrade", req.url));
   }
+
   return NextResponse.next();
 }
 
-// ✅ 매처는 "페이지 경로"만 대상으로: /api는 애초에 제외
+// ✅ 매처는 "페이지 경로"만 대상으로
 export const config = {
   matcher: [
     "/start/:path*",
     "/signature/:path*",
     "/master/:path*",
-    // 또는 전역 패턴을 쓰고 싶다면 아래 한 줄만 남기고 위 3줄 삭제:
+    // 전역 가드를 쓰고 싶다면 아래 한 줄만 사용:
     // "/((?!api|_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)",
   ],
 };
