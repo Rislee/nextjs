@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useMemo, useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useCallback, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -11,14 +11,13 @@ const supabase = createClient(
 
 export default function SignUpPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-gray-600">회원가입 초기화 중…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-gray-600">회원가입 초기화 중...</div>}>
       <Content />
     </Suspense>
   );
 }
 
 function Content() {
-  const router = useRouter();
   const sp = useSearchParams();
 
   const next = sp.get('next') || '';
@@ -51,8 +50,13 @@ function Content() {
       const session = data.session;
       if (session) {
         // uid 쿠키 동기화 후 이동
-        await fetch('/api/session/ensure', { method: 'GET', credentials: 'include' });
-        router.replace(next || '/dashboard');
+        await fetch('/api/session/ensure', { 
+          method: 'GET', 
+          credentials: 'include',
+          headers: session.access_token ? { Authorization: `Bearer ${session.access_token}` } : {},
+        });
+        // window.location.href로 변경
+        window.location.href = next || '/dashboard';
       } else {
         setNotice("회원가입이 완료되었습니다. 이메일의 인증 링크를 확인해 주세요.");
       }
@@ -61,7 +65,7 @@ function Content() {
     } finally {
       setLoading(false);
     }
-  }, [email, pw, fullName, next, router, loading]);
+  }, [email, pw, fullName, next, loading]);
 
   return (
     <main className="mx-auto max-w-sm p-6">
@@ -94,9 +98,9 @@ function Content() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+          className="w-full rounded-md border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
         >
-          {loading ? '가입 중…' : '회원가입'}
+          {loading ? '가입 중...' : '회원가입'}
         </button>
       </form>
 

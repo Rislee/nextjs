@@ -1,8 +1,7 @@
-// app/auth/sign-in/page.tsx
 'use client';
 
 import { Suspense, useCallback, useMemo, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 
 const supabase = createClient(
@@ -12,14 +11,13 @@ const supabase = createClient(
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-gray-600">로그인 초기화 중…</div>}>
+    <Suspense fallback={<div className="p-6 text-sm text-gray-600">로그인 초기화 중...</div>}>
       <Content />
     </Suspense>
   );
 }
 
 function Content() {
-  const router = useRouter();
   const sp = useSearchParams();
 
   const next = sp.get('next') || '';
@@ -54,13 +52,13 @@ function Content() {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      router.replace(next || '/dashboard');
+      // window.location.href로 변경하여 쿠키 확실히 적용
+      window.location.href = next || '/dashboard';
     } catch (e: any) {
       setErr(e?.message || '로그인에 실패했습니다.');
-    } finally {
       setLoading(false);
     }
-  }, [email, pw, next, router, loading]);
+  }, [email, pw, next, loading]);
 
   // Google OAuth
   const signInWithGoogle = useCallback(async () => {
@@ -104,9 +102,9 @@ function Content() {
         <button
           type="submit"
           disabled={loading}
-          className="w-full rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
+          className="w-full rounded-md border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
         >
-          {loading ? '로그인 중…' : '로그인'}
+          {loading ? '로그인 중...' : '로그인'}
         </button>
         {err && <p className="text-sm text-red-600">{err}</p>}
       </form>
