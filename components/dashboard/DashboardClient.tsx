@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { PlanId } from "@/lib/plan";
-import { PLAN_TO_TITLE, PLAN_LEVEL } from "@/lib/plan";
+import { PLAN_TO_TITLE, ALL_PLANS } from "@/lib/plan";
 
 type Payment = {
   id: string;
@@ -13,13 +13,13 @@ type Payment = {
   created_at: string;
 };
 
-type Membership = {
-  plan_id: PlanId | null;
-  status: "active" | "past_due" | "canceled" | "none" | null;
-  updated_at: string | null;
+type ActivePlan = {
+  plan_id: PlanId;
+  status: "active";
+  activated_at: string;
+  expires_at: string | null;
+  updated_at: string;
 };
-
-const ALL_PLANS: PlanId[] = ["START_OS", "SIGNATURE_OS", "MASTER_OS"];
 
 interface DashboardClientProps {
   isAdmin?: boolean;
@@ -28,7 +28,7 @@ interface DashboardClientProps {
 
 export default function DashboardClient({ isAdmin = false, userEmail = "" }: DashboardClientProps) {
   const [payments, setPayments] = useState<Payment[]>([]);
-  const [membership, setMembership] = useState<Membership | null>(null);
+  const [activePlans, setActivePlans] = useState<ActivePlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
@@ -39,7 +39,6 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
       setError("");
       
       try {
-        // summary API만 호출 (uid 쿠키로 충분)
         const res = await fetch("/api/me/summary", { 
           credentials: "include",
           cache: "no-store"
@@ -62,7 +61,7 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
         }
         
         const json = await res.json();
-        setMembership(json.membership ?? { plan_id: null, status: null, updated_at: null });
+        setActivePlans(json.activePlans ?? []);
         setPayments(json.payments ?? []);
         setLoading(false);
         
@@ -77,14 +76,11 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
     return () => { gone = true; };
   }, []);
 
-  const memActive = membership?.status === "active" && !!membership?.plan_id;
-
-  const upgradeCandidates: PlanId[] = (() => {
-    if (!memActive) return [];
-    const cur = membership!.plan_id as PlanId;
-    const curLvl = PLAN_LEVEL[cur];
-    return ALL_PLANS.filter((p) => PLAN_LEVEL[p] > curLvl);
-  })();
+  // 보유 중인 플랜 ID 목록
+  const ownedPlanIds = activePlans.map(plan => plan.plan_id);
+  
+  // 구매 가능한 플랜들 (보유하지 않은 플랜들)
+  const purchasablePlans = ALL_PLANS.filter(planId => !ownedPlanIds.includes(planId));
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-8">
@@ -121,77 +117,86 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
         )}
       </div>
 
-      {/* 활성 OS(멤버십) */}
+      {/* 보유 중인 활성 플랜들 */}
       <section className="space-y-2">
-        <h2 className="text-lg font-semibold">활성 OS(멤버십)</h2>
+        <h2 className="text-lg font-semibold">보유 중인 플랜</h2>
         {loading ? (
-          <p className="text-sm text-gray-500">멤버십 정보를 불러오는 중…</p>
-        ) : memActive ? (
-          <div className="rounded border p-4 text-sm space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="font-medium">
-                  {PLAN_TO_TITLE[membership!.plan_id as PlanId]}
-                </div>
-                <div className="text-xs text-gray-500">
-                  상태: <span className="text-green-700">active</span>
-                  {membership?.updated_at
-                    ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}`
-                    : ""}
-                </div>
-              </div>
-              <a
-                className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                href={`/go/${membership!.plan_id}`}
-              >
-                이용하기
-              </a>
-            </div>
-
-            {upgradeCandidates.length > 0 && (
-              <div className="pt-2 border-t">
-                <div className="mb-2 text-xs text-gray-600">업그레이드</div>
-                <div className="flex flex-wrap gap-2">
-                  {upgradeCandidates.map((p) => (
-                    <a
-                      key={p}
-                      className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                      href={`/checkout/${p}`}
-                    >
-                      {PLAN_TO_TITLE[p]}로 업그레이드
-                    </a>
-                  ))}
+          <p className="text-sm text-gray-500">플랜 정보를 불러오는 중…</p>
+        ) : activePlans.length > 0 ? (
+          <div className="space-y-3">
+            {activePlans.map((plan, index) => (
+              <div key={plan.plan_id} className="rounded border p-4 text-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium">
+                      {PLAN_TO_TITLE[plan.plan_id]}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      상태: <span className="text-green-700">active</span>
+                      {' • '}
+                      활성화: {new Date(plan.activated_at).toLocaleString()}
+                      {plan.expires_at && (
+                        <>
+                          {' • '}
+                          만료: {new Date(plan.expires_at).toLocaleString()}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <a
+                    className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                    href={`/go/${plan.plan_id}`}
+                  >
+                    이용하기
+                  </a>
                 </div>
               </div>
-            )}
+            ))}
           </div>
         ) : (
           <div className="rounded border p-4 text-sm">
-            <div className="mb-2">활성 멤버십이 없습니다.</div>
-            {membership?.status && membership.status !== "active" ? (
-              <div className="text-xs text-gray-500 mb-3">
-                현재 상태: {membership.status}
-                {membership?.updated_at
-                  ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}`
-                  : ""}
-              </div>
-            ) : null}
-            <div className="flex flex-wrap gap-2">
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/START_OS">
-                START OS 구매
-              </a>
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/SIGNATURE_OS">
-                SIGNATURE OS 구매
-              </a>
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/MASTER_OS">
-                MASTER OS 구매
-              </a>
-            </div>
-            <p className="mt-2 text-xs text-gray-500">
-              관리자가 수동으로 권한을 부여한 경우에도 여기에서 활성 상태로 표시됩니다.
-            </p>
+            <p className="text-gray-600">현재 보유 중인 활성 플랜이 없습니다.</p>
           </div>
         )}
+      </section>
+
+      {/* 추가 구매 가능한 플랜들 */}
+      <section className="space-y-2">
+        <h2 className="text-lg font-semibold">
+          {activePlans.length > 0 ? "추가 구매 가능한 플랜" : "구매 가능한 플랜"}
+        </h2>
+        <div className="rounded border p-4 text-sm">
+          {purchasablePlans.length > 0 ? (
+            <>
+              <div className="mb-3">
+                {activePlans.length > 0 
+                  ? "추가로 다른 플랜을 구매할 수 있습니다. 여러 플랜을 동시에 보유할 수 있습니다."
+                  : "원하는 플랜을 선택해주세요."
+                }
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {purchasablePlans.map((planId) => (
+                  <a
+                    key={planId}
+                    className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                    href={`/checkout/${planId}`}
+                  >
+                    {PLAN_TO_TITLE[planId]} 구매
+                  </a>
+                ))}
+              </div>
+            </>
+          ) : (
+            <div>
+              <p className="text-gray-600 mb-2">
+                모든 플랜을 보유하고 계십니다.
+              </p>
+              <p className="text-xs text-gray-500">
+                관리자가 수동으로 권한을 부여한 경우에도 여기에서 활성 상태로 표시됩니다.
+              </p>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* 결제 내역 */}

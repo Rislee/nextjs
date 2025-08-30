@@ -11,7 +11,7 @@ export async function GET() {
   try {
     const ck = await cookies();
     
-    // 먼저 uid 쿠키로 확인 (빠른 경로)
+    // uid 쿠키로 확인
     let uid = ck.get("uid")?.value;
     
     // uid 쿠키가 없으면 Supabase 세션으로 확인
@@ -41,7 +41,6 @@ export async function GET() {
       uid = userData.user.id;
     }
 
-    // 서비스 롤 키 확인
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
       console.error("SUPABASE_SERVICE_ROLE_KEY is not set");
       return NextResponse.json(
@@ -57,12 +56,14 @@ export async function GET() {
       { auth: { persistSession: false } }
     );
 
-    const [memRes, payRes] = await Promise.all([
+    // user_plans에서 활성 플랜들 조회
+    const [plansRes, payRes] = await Promise.all([
       admin
-        .from("memberships")
-        .select("plan_id,status,updated_at")
+        .from("user_plans")
+        .select("plan_id,status,activated_at,expires_at,updated_at")
         .eq("user_id", uid)
-        .maybeSingle(),
+        .eq("status", "active")
+        .order("activated_at", { ascending: false }),
       admin
         .from("payments")
         .select("id,plan_id,status,amount,currency,created_at")
@@ -71,21 +72,29 @@ export async function GET() {
         .limit(50),
     ]);
 
-    // 에러 체크
-    if (memRes.error) {
-      console.error("Membership query error:", memRes.error);
+    if (plansRes.error) {
+      console.error("Plans query error:", plansRes.error);
     }
     if (payRes.error) {
       console.error("Payments query error:", payRes.error);
     }
 
-    const membership = memRes?.data ?? null;
+    const activePlans = plansRes?.data ?? [];
     const payments = payRes?.data ?? [];
+
+    // 레거시 호환성을 위해 첫 번째 플랜을 membership으로도 반환
+    const primaryPlan = activePlans[0] || null;
+    const membership = primaryPlan ? {
+      plan_id: primaryPlan.plan_id,
+      status: primaryPlan.status,
+      updated_at: primaryPlan.updated_at
+    } : null;
 
     return NextResponse.json({ 
       ok: true, 
-      uid, // 디버깅용
-      membership, 
+      uid,
+      activePlans, // 새로운 다중 플랜 데이터
+      membership, // 레거시 호환성
       payments 
     });
     

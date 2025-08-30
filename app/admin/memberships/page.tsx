@@ -22,8 +22,8 @@ async function getCurrentUserEmail() {
   return data.user?.email || null;
 }
 
-// ---- Server Actions ----
-export async function grantAction(formData: FormData) {
+// 특정 플랜 권한 부여
+export async function grantPlanAction(formData: FormData) {
   "use server";
   const email = await getCurrentUserEmail();
   if (!isAdminEmail(email)) throw new Error("forbidden");
@@ -38,7 +38,7 @@ export async function grantAction(formData: FormData) {
     { auth: { persistSession: false } }
   );
 
-  const { error } = await admin.rpc("admin_grant_membership", {
+  const { error } = await admin.rpc("admin_grant_plan", {
     p_email: target,
     p_plan: plan,
     p_status: "active",
@@ -48,7 +48,34 @@ export async function grantAction(formData: FormData) {
   redirect(`/admin/memberships?q=${encodeURIComponent(target)}`);
 }
 
-export async function revokeAction(formData: FormData) {
+// 특정 플랜 권한 회수
+export async function revokePlanAction(formData: FormData) {
+  "use server";
+  const email = await getCurrentUserEmail();
+  if (!isAdminEmail(email)) throw new Error("forbidden");
+
+  const target = String(formData.get("target_email") || "");
+  const plan = String(formData.get("plan") || "");
+  const status = String(formData.get("status") || "canceled");
+
+  const admin = createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } }
+  );
+
+  const { error } = await admin.rpc("admin_revoke_plan", {
+    p_email: target,
+    p_plan: plan,
+    p_status: status,
+  });
+  if (error) throw new Error(error.message);
+
+  redirect(`/admin/memberships?q=${encodeURIComponent(target)}`);
+}
+
+// 모든 플랜 권한 회수
+export async function revokeAllPlansAction(formData: FormData) {
   "use server";
   const email = await getCurrentUserEmail();
   if (!isAdminEmail(email)) throw new Error("forbidden");
@@ -71,7 +98,6 @@ export async function revokeAction(formData: FormData) {
   redirect(`/admin/memberships?q=${encodeURIComponent(target)}`);
 }
 
-// ---- Page ----
 export default async function Page({
   searchParams,
 }: {
@@ -95,9 +121,7 @@ export default async function Page({
     );
 
   const q = (searchParams?.q || "").trim();
-  let record:
-    | { user_id: string; email: string; plan_id: string | null; status: string | null; updated_at: string | null }
-    | null = null;
+  let userPlans: any[] = [];
 
   if (q) {
     const admin = createAdminClient(
@@ -105,18 +129,27 @@ export default async function Page({
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false } }
     );
-    const { data, error } = await admin.rpc("admin_get_membership_by_email", {
+    
+    const { data, error } = await admin.rpc("admin_get_user_plans", {
       p_email: q,
     });
-    if (!error && data && data.length > 0) {
-      record = data[0] as any;
+    
+    if (!error && data) {
+      userPlans = data as any[];
     }
   }
 
+  const allPlans = ["START_OS", "SIGNATURE_OS", "MASTER_OS"];
+  const planTitles = {
+    START_OS: "START OS",
+    SIGNATURE_OS: "SIGNATURE OS", 
+    MASTER_OS: "MASTER OS"
+  };
+
   return (
-    <main className="mx-auto max-w-2xl p-6 space-y-6">
+    <main className="mx-auto max-w-3xl p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">멤버십 관리</h1>
+        <h1 className="text-xl font-semibold">멤버십 관리 (다중 플랜)</h1>
         <a href="/dashboard" className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
           대시보드로 돌아가기
         </a>
@@ -124,7 +157,10 @@ export default async function Page({
       
       <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
         <p className="text-sm text-amber-800">
-          🔐 관리자 전용 페이지 • {email}
+          관리자 전용 페이지 • {email}
+        </p>
+        <p className="text-xs text-amber-700 mt-1">
+          이제 사용자는 여러 플랜을 동시에 보유할 수 있습니다.
         </p>
       </div>
 
@@ -144,46 +180,96 @@ export default async function Page({
       {/* 결과 */}
       {!q ? (
         <p className="text-sm text-gray-500">이메일로 검색하세요.</p>
-      ) : record ? (
-        <div className="rounded border p-4 text-sm space-y-2">
-          <div>
-            <span className="text-gray-500">이메일</span> {record.email}
-          </div>
-          <div>
-            <span className="text-gray-500">user_id</span> {record.user_id}
-          </div>
-          <div>
-            <span className="text-gray-500">현재 플랜</span>{" "}
-            {record.plan_id || "(없음)"} / {record.status || "(없음)"}
-          </div>
-          <div className="text-xs text-gray-500">
-            업데이트: {record.updated_at || "-"}
+      ) : userPlans.length === 0 ? (
+        <p className="text-sm text-red-600">해당 이메일의 사용자가 없거나 활성 플랜이 없습니다.</p>
+      ) : (
+        <div className="space-y-4">
+          {/* 사용자 정보 */}
+          <div className="rounded border p-4 bg-gray-50">
+            <h3 className="font-semibold text-sm mb-2">사용자 정보</h3>
+            <div className="text-sm">
+              <div>이메일: {userPlans[0]?.email}</div>
+              <div>User ID: {userPlans[0]?.user_id}</div>
+            </div>
           </div>
 
-          {/* 활성화 */}
-          <div className="pt-3 flex flex-wrap gap-2">
-            {["START_OS", "SIGNATURE_OS", "MASTER_OS"].map((p) => (
-              <form key={p} action={grantAction}>
-                <input type="hidden" name="target_email" value={q} />
-                <input type="hidden" name="plan" value={p} />
-                <button className="rounded border px-3 py-1 hover:bg-gray-50">
-                  {p} 활성화
-                </button>
-              </form>
-            ))}
+          {/* 보유 중인 플랜들 */}
+          <div className="rounded border p-4">
+            <h3 className="font-semibold text-sm mb-3">보유 중인 플랜 ({userPlans.filter(p => p.plan_id).length}개)</h3>
+            
+            {userPlans.filter(p => p.plan_id).length === 0 ? (
+              <p className="text-sm text-gray-600">활성 플랜 없음</p>
+            ) : (
+              <div className="space-y-2">
+                {userPlans
+                  .filter(p => p.plan_id)
+                  .map((plan, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-green-50 rounded border-l-4 border-green-400">
+                    <div>
+                      <div className="font-medium text-sm">
+                        {planTitles[plan.plan_id as keyof typeof planTitles]} ({plan.plan_id})
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        상태: {plan.status} • 
+                        활성화: {new Date(plan.activated_at).toLocaleString()}
+                        {plan.expires_at && ` • 만료: ${new Date(plan.expires_at).toLocaleString()}`}
+                      </div>
+                    </div>
+                    <form action={revokePlanAction} className="inline">
+                      <input type="hidden" name="target_email" value={q} />
+                      <input type="hidden" name="plan" value={plan.plan_id} />
+                      <input type="hidden" name="status" value="canceled" />
+                      <button className="text-xs rounded border px-2 py-1 hover:bg-gray-50 text-red-600">
+                        회수
+                      </button>
+                    </form>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-            {/* 회수 */}
-            <form action={revokeAction}>
-              <input type="hidden" name="target_email" value={q} />
-              <input type="hidden" name="status" value="canceled" />
-              <button className="rounded border px-3 py-1 hover:bg-gray-50">
-                권한 회수
-              </button>
-            </form>
+          {/* 플랜 관리 액션 */}
+          <div className="rounded border p-4">
+            <h3 className="font-semibold text-sm mb-3">플랜 관리</h3>
+            
+            {/* 개별 플랜 부여 */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-medium text-gray-700">개별 플랜 부여</h4>
+              <div className="flex flex-wrap gap-2">
+                {allPlans.map((planId) => {
+                  const hasThisPlan = userPlans.some(p => p.plan_id === planId);
+                  return (
+                    <form key={planId} action={grantPlanAction} className="inline">
+                      <input type="hidden" name="target_email" value={q} />
+                      <input type="hidden" name="plan" value={planId} />
+                      <button 
+                        className={`text-xs rounded border px-3 py-1 hover:bg-gray-50 ${
+                          hasThisPlan ? 'bg-green-100 text-green-800' : ''
+                        }`}
+                        disabled={hasThisPlan}
+                      >
+                        {planTitles[planId as keyof typeof planTitles]} {hasThisPlan ? '(보유중)' : '부여'}
+                      </button>
+                    </form>
+                  );
+                })}
+              </div>
+              
+              {/* 모든 플랜 회수 */}
+              <div className="pt-3 border-t">
+                <h4 className="text-xs font-medium text-gray-700 mb-2">전체 관리</h4>
+                <form action={revokeAllPlansAction} className="inline">
+                  <input type="hidden" name="target_email" value={q} />
+                  <input type="hidden" name="status" value="canceled" />
+                  <button className="text-xs rounded border px-3 py-1 hover:bg-gray-50 text-red-600">
+                    모든 플랜 회수
+                  </button>
+                </form>
+              </div>
+            </div>
           </div>
         </div>
-      ) : (
-        <p className="text-sm text-red-600">해당 이메일의 사용자가 없거나 멤버십이 없습니다.</p>
       )}
     </main>
   );

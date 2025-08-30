@@ -7,7 +7,7 @@ import { createBrowserClient } from "@supabase/ssr";
 import Script from "next/script";
 import { requestIamportPay } from "@/lib/portone/v1-client";
 import type { PlanId } from "@/lib/plan";
-import { hasAccessOrHigher, PLAN_TO_TITLE } from "@/lib/plan";
+import { hasSpecificAccess, PLAN_TO_TITLE } from "@/lib/plan";
 
 type Stage = "loading" | "checking" | "signin" | "already_has" | "eligible" | "starting" | "paying" | "done" | "error";
 
@@ -42,7 +42,6 @@ export default function CheckoutPlanPage() {
       }
     }, 100);
 
-    // 3초 후에도 로드 안되면 정리
     const timeout = setTimeout(() => {
       clearInterval(checkSDK);
     }, 3000);
@@ -58,7 +57,7 @@ export default function CheckoutPlanPage() {
       setStage("checking");
       setErrorMsg("");
 
-      // 세션 확인 (5초 타임아웃)
+      // 세션 확인
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), 5000);
       const ensure = await fetch("/api/session/ensure", {
@@ -84,13 +83,14 @@ export default function CheckoutPlanPage() {
       if (membership?.status === "active" && membership?.plan_id) {
         setCurrentPlan(membership.plan_id as PlanId);
         
-        // 동일하거나 상위 플랜을 이미 보유중
-        if (hasAccessOrHigher(membership.plan_id as PlanId, plan)) {
+        // 동일한 플랜을 이미 보유중이면 차단
+        if (membership.plan_id === plan) {
           setStage("already_has");
           return;
         }
       }
 
+      // 다른 플랜이거나 멤버십이 없으면 구매 가능
       setStage("eligible");
     } catch (e: any) {
       setErrorMsg(e?.message || "초기 확인 중 오류가 발생했습니다.");
@@ -117,9 +117,11 @@ export default function CheckoutPlanPage() {
       });
 
       if (res.status === 409) {
-        // 이미 보유중인 플랜
-        setStage("already_has");
-        return;
+        const data = await res.json();
+        if (data.error === 'already_active_same_plan') {
+          setStage("already_has");
+          return;
+        }
       }
 
       if (!res.ok) {
@@ -129,7 +131,6 @@ export default function CheckoutPlanPage() {
 
       const { merchantUid, amount, orderName } = await res.json();
 
-      // m_redirect_url 로 사용할 절대 URL
       const redirectUrl =
         process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL ||
         `${window.location.origin}/checkout/complete`;
@@ -158,7 +159,6 @@ export default function CheckoutPlanPage() {
     return () => clearTimeout(t);
   }, [stage, startOrderAndPay]);
 
-  // SDK 로딩 전
   if (!sdkReady) {
     return (
       <>
@@ -195,15 +195,8 @@ export default function CheckoutPlanPage() {
         {stage === "already_has" && (
           <div className="space-y-3">
             <h2 className="font-semibold">이미 보유중인 플랜입니다</h2>
-            {currentPlan && (
-              <p className="text-gray-600">
-                현재 플랜: {PLAN_TO_TITLE[currentPlan]}
-              </p>
-            )}
-            <p className="text-sm text-gray-500">
-              {plan === currentPlan 
-                ? "동일한 플랜을 이미 이용중입니다."
-                : "더 높은 등급의 플랜을 이미 이용중입니다."}
+            <p className="text-gray-600">
+              현재 {plan} 플랜을 이미 이용중입니다.
             </p>
             <div className="flex gap-2">
               <button 
@@ -212,14 +205,12 @@ export default function CheckoutPlanPage() {
               >
                 대시보드로 이동
               </button>
-              {currentPlan && (
-                <a 
-                  href={`/go/${currentPlan}`}
-                  className="rounded border px-3 py-1 hover:bg-gray-50"
-                >
-                  현재 플랜 이용하기
-                </a>
-              )}
+              <a 
+                href={`/go/${plan}`}
+                className="rounded border px-3 py-1 hover:bg-gray-50"
+              >
+                플랜 이용하기
+              </a>
             </div>
           </div>
         )}
@@ -246,6 +237,7 @@ export default function CheckoutPlanPage() {
         <div className="mt-6 text-xs text-gray-500">
           <div>stage: {stage}</div>
           <div>plan: {plan}</div>
+          <div>current: {currentPlan || 'none'}</div>
           <div>SDK: {sdkReady ? "Ready" : "Loading..."}</div>
         </div>
       </main>

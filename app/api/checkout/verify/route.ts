@@ -16,14 +16,14 @@ export async function POST(req: Request) {
 
     // 1) PortOne v1 결제 조회
     const token = await getV1AccessToken();
-    const pay = await getV1Payment(impUid, token); // {imp_uid, merchant_uid, status, amount, ...}
+    const pay = await getV1Payment(impUid, token);
 
-    // merchant_uid 불일치 시도는 기록하고 에러 처리(중요)
+    // merchant_uid 불일치 시도는 기록하고 에러 처리
     if (merchantUid && pay.merchant_uid && merchantUid !== pay.merchant_uid) {
       return NextResponse.json({ ok: false, error: 'merchant_mismatch' }, { status: 400 });
     }
 
-    // 2) DB의 대상 주문 찾기(merchant_uid로 1건)
+    // 2) DB의 대상 주문 찾기
     const q = await supabaseAdmin
       .from('payments')
       .select('id, user_id, plan_id, status')
@@ -60,7 +60,7 @@ export async function POST(req: Request) {
       .update({
         status: 'paid',
         portone_payment_id: pay.imp_uid,
-        amount: pay.amount ?? null,     // ✅ 컬럼명: amount
+        amount: pay.amount ?? null,
         currency: pay.currency ?? 'KRW',
         failure: null,
         updated_at: new Date().toISOString(),
@@ -72,19 +72,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, step: 'payments.update', detail: up.error }, { status: 500 });
     }
 
-    // 4) 멤버십 활성화(upsert)
+    // 4) user_plans에 플랜 추가/활성화 (UPSERT)
     const now = new Date().toISOString();
     const up2 = await supabaseAdmin
-      .from('memberships')
+      .from('user_plans')
       .upsert(
-        { user_id: q.data.user_id, plan_id: q.data.plan_id, status: 'active', updated_at: now },
-        { onConflict: 'user_id' }
+        { 
+          user_id: q.data.user_id, 
+          plan_id: q.data.plan_id, 
+          status: 'active', 
+          activated_at: now,
+          updated_at: now 
+        },
+        { onConflict: 'user_id,plan_id' } // 사용자+플랜 조합으로 UPSERT
       );
+      
     if (up2.error) {
-      return NextResponse.json({ ok: false, step: 'memberships.upsert', detail: up2.error }, { status: 500 });
+      return NextResponse.json({ ok: false, step: 'user_plans.upsert', detail: up2.error }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, status: 'paid', amount: pay.amount ?? null, currency: pay.currency ?? 'KRW' });
+    return NextResponse.json({ 
+      ok: true, 
+      status: 'paid', 
+      amount: pay.amount ?? null, 
+      currency: pay.currency ?? 'KRW',
+      plan_activated: q.data.plan_id
+    });
   } catch (e: any) {
     console.error('verify error', e);
     return NextResponse.json({ ok: false, error: e?.message ?? 'verify_failed' }, { status: 500 });

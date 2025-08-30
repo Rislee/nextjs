@@ -15,12 +15,6 @@ const PRICE: Record<PlanId, number> = {
   MASTER_OS: 55000000,
 };
 
-const PLAN_LEVEL: Record<PlanId, number> = {
-  START_OS: 1,
-  SIGNATURE_OS: 2,
-  MASTER_OS: 3,
-};
-
 export async function POST(req: Request) {
   // 0) 입력 검사
   const body = await req.json().catch(() => ({}));
@@ -34,7 +28,7 @@ export async function POST(req: Request) {
   const uid = ck.get('uid')?.value;
   if (!uid) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
 
-  // 2) 현재 멤버십 확인 → 동일/하위 플랜이면 차단
+  // 2) 현재 멤버십 확인 → 동일 플랜이면 차단 (다른 플랜은 허용)
   const m = await supabaseAdmin
     .from('memberships')
     .select('plan_id,status')
@@ -44,15 +38,12 @@ export async function POST(req: Request) {
   const curPlan = (m.data?.plan_id ?? null) as PlanId | null;
   const curStatus = (m.data?.status ?? 'none') as 'active' | 'past_due' | 'canceled' | 'none';
 
-  if (curStatus === 'active' && curPlan) {
-    const curLv = PLAN_LEVEL[curPlan];
-    const nextLv = PLAN_LEVEL[planId];
-    if (nextLv <= curLv) {
-      return NextResponse.json(
-        { ok: false, error: 'already_active_or_higher', detail: { current: curPlan } },
-        { status: 409 }
-      );
-    }
+  // 현재 활성 상태에서 동일한 플랜을 구매하려고 하면 차단
+  if (curStatus === 'active' && curPlan === planId) {
+    return NextResponse.json(
+      { ok: false, error: 'already_active_same_plan', detail: { current: curPlan } },
+      { status: 409 }
+    );
   }
 
   // 3) 주문 생성
