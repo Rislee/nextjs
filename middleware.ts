@@ -35,5 +35,7 @@ export function middleware(req: NextRequest) {
 
 // ✅ matcher: 보호 경로만 감시
 export const config = {
-  matcher: ["/start/:path*", "/signature/:path*", "/master/:path*"],
+  matcher: ["/start/:path*", "/signature/:path*", "/master/:path*", "/dashboard/:path*"],
 };
+
+
