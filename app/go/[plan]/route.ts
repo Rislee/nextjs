@@ -55,17 +55,16 @@ export async function GET(
 
   console.log(`[/go/${plan}] Access granted, redirecting to Framer`);
 
-  // 4. 모든 체크 통과 - Framer 페이지로 리디렉션
-  // 임시 토큰 생성
+  // 4. 챗봇용 토큰 생성 (더 긴 유효시간)
   const token = Buffer.from(JSON.stringify({
     uid,
     targetPlan: plan,
     userPlans: userPlans.map(p => p.plan_id),
     timestamp: Date.now(),
-    expires: Date.now() + 60000 // 1분 유효
+    expires: Date.now() + (2 * 60 * 60 * 1000) // 2시간 유효
   })).toString('base64');
 
-  // Framer 페이지로 토큰과 함께 리디렉션
+  // 5. Framer 페이지로 토큰과 함께 리디렉션
   const framerUrl = new URL(targetUrl);
   framerUrl.searchParams.set("token", token);
   
