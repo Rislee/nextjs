@@ -111,23 +111,21 @@ export default async function DebugCookiesPage() {
         </section>
       )}
       
-      {/* 액션 버튼들 */}
+      {/* 액션 버튼들 - 클라이언트 컴포넌트로 분리 필요 */}
       <section className="flex gap-4">
-        <form action="/api/auth/logout" method="POST">
-          <button 
-            type="submit"
-            className="rounded-md bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700"
-          >
-            모든 세션 정리 (로그아웃)
-          </button>
-        </form>
+        <a 
+          href="/api/auth/logout"
+          className="rounded-md bg-red-600 text-white px-4 py-2 text-sm hover:bg-red-700"
+        >
+          모든 세션 정리 (로그아웃)
+        </a>
         
-        <button 
-          onClick={() => window.location.reload()}
+        <a 
+          href="/debug/cookies"
           className="rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
         >
           새로고침
-        </button>
+        </a>
         
         <a 
           href="/dashboard"
