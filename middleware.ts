@@ -36,5 +36,6 @@ export const config = {
     "/dashboard/:path*",
     "/auth/sign-in",
     "/auth/sign-up",
+    "/admin/:path*",
   ],
 };
