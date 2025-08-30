@@ -30,28 +30,49 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
   const [payments, setPayments] = useState<Payment[]>([]);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
 
   useEffect(() => {
     let gone = false;
     (async () => {
       setLoading(true);
-      const res = await fetch("/api/me/summary", { credentials: "include" });
-      if (gone) return;
+      setError("");
+      
+      try {
+        const res = await fetch("/api/me/summary", { 
+          credentials: "include",
+          cache: "no-store"
+        });
+        
+        if (gone) return;
 
-      if (res.status === 401) {
-        window.location.assign("/auth/sign-in?next=/dashboard");
-        return;
-      }
-      if (!res.ok) {
-        console.error("summary fetch failed", await res.text());
+        if (res.status === 401) {
+          console.log("Unauthorized, redirecting to login...");
+          window.location.assign("/auth/sign-in?next=/dashboard");
+          return;
+        }
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("summary fetch failed:", res.status, errorText);
+          setError(`데이터를 불러올 수 없습니다. (${res.status})`);
+          setLoading(false);
+          return;
+        }
+        
+        const json = await res.json();
+        setMembership(json.membership ?? { plan_id: null, status: null, updated_at: null });
+        setPayments(json.payments ?? []);
         setLoading(false);
-        return;
+        
+      } catch (err: any) {
+        if (gone) return;
+        console.error("Dashboard fetch error:", err);
+        setError(err?.message || "네트워크 오류가 발생했습니다.");
+        setLoading(false);
       }
-      const json = await res.json();
-      setMembership(json.membership ?? { plan_id: null, status: null, updated_at: null });
-      setPayments(json.payments ?? []);
-      setLoading(false);
     })();
+    
     return () => { gone = true; };
   }, []);
 
@@ -66,6 +87,19 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-8">
+      {/* 에러 메시지 */}
+      {error && (
+        <div className="rounded-md bg-red-50 border border-red-200 p-4">
+          <p className="text-sm text-red-800">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-2 text-sm text-red-600 underline"
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold">내 계정</h1>
