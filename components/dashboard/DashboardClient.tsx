@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
-import LogoutButton from "@/components/auth/LogoutButton";
 import type { PlanId } from "@/lib/plan";
 import { PLAN_TO_TITLE, PLAN_LEVEL } from "@/lib/plan";
 
@@ -76,10 +75,10 @@ export default function DashboardClient() {
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-8">
-      {/* 헤더 */}
+      {/* 헤더 (로그아웃 버튼 제거) */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">내 계정</h1>
-        <LogoutButton />
+        {/* 레이아웃 헤더에 AuthStatusButton 사용 중 */}
       </div>
 
       {/* 활성 OS(멤버십) */}
@@ -150,9 +149,6 @@ export default function DashboardClient() {
                 MASTER OS 구매
               </a>
             </div>
-            <p className="mt-2 text-xs text-gray-500">
-              관리자가 수동으로 권한을 부여한 경우에도 여기에서 활성 상태로 표시됩니다.
-            </p>
           </div>
         )}
       </section>
