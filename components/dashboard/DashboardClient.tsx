@@ -39,19 +39,7 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
       setError("");
       
       try {
-        // 먼저 세션 동기화 (uid 쿠키 설정)
-        const ensureRes = await fetch("/api/session/ensure", {
-          method: "GET",
-          credentials: "include",
-        });
-        
-        if (!ensureRes.ok && ensureRes.status === 401) {
-          console.log("Session ensure failed, redirecting to login...");
-          window.location.assign("/auth/sign-in?next=/dashboard");
-          return;
-        }
-        
-        // 이제 summary API 호출
+        // summary API만 호출 (uid 쿠키로 충분)
         const res = await fetch("/api/me/summary", { 
           credentials: "include",
           cache: "no-store"
