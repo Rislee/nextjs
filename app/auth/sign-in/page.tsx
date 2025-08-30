@@ -1,3 +1,4 @@
+// app/auth/sign-in/page.tsx
 'use client';
 
 import { Suspense, useCallback, useMemo, useState } from 'react';
@@ -27,7 +28,7 @@ function Content() {
     return next ? `${base}?next=${encodeURIComponent(next)}` : base;
   }, [next]);
 
-  // ---- Email/Password ----
+  // Email/Password
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [loading, setLoading] = useState(false);
@@ -46,8 +47,13 @@ function Content() {
       });
       if (error) throw error;
 
-      // uid 쿠키 동기화
-      await fetch('/api/session/ensure', { method: 'GET', credentials: 'include' });
+      const token = data.session?.access_token || "";
+      await fetch('/api/session/ensure', {
+        method: 'GET',
+        credentials: 'include',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
       router.replace(next || '/dashboard');
     } catch (e: any) {
       setErr(e?.message || '로그인에 실패했습니다.');
@@ -56,7 +62,7 @@ function Content() {
     }
   }, [email, pw, next, router, loading]);
 
-  // ---- Google OAuth ----
+  // Google OAuth
   const signInWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',

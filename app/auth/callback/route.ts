@@ -4,67 +4,73 @@ import { createServerClient } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const revalidate = 0;
 
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
-  const next = url.searchParams.get("next") || "/checkout";
-  const code = url.searchParams.get("code") || "";
+  const next = url.searchParams.get("next") || "/dashboard";
+  const code = url.searchParams.get("code") || ""; // ⬅️ code 명시적으로 받기
 
-  // 최종 리다이렉트 목적지
-  const redirectTo = new URL(next, url.origin);
+  const res = NextResponse.redirect(new URL(next, req.url));
 
-  // ✅ Supabase가 세션쿠키를 "이 응답(res)"에 직접 쓰도록 세팅해야 합니다.
-  const res = NextResponse.redirect(redirectTo);
-
-  const supabase = createServerClient(
+  const supa = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      // Next Response에 쿠키를 다시 써주는 어댑터
       cookies: {
-        get(name: string) {
-          return req.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          // Supabase가 설정하는 세션 쿠키를 응답에 실제로 기록
+        get: (name: string) => req.cookies.get(name)?.value,
+        set: (name: string, value: string, options: any) => {
           res.cookies.set({ name, value, ...options });
         },
-        remove(name: string, options: any) {
+        remove: (name: string, options: any) => {
           res.cookies.set({ name, value: "", ...options, maxAge: 0 });
         },
       },
     }
   );
 
+  // OAuth code → 세션 교환 (sb-* 쿠키 설정)
   if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (error) {
-      // 세션 교환 실패 시 로그인 화면으로
-      const fail = new URL(`/auth/sign-in?error=exchange_failed`, url.origin);
-      return NextResponse.redirect(fail);
+    try {
+      await supa.auth.exchangeCodeForSession(code); // ⬅️ code 전달
+    } catch (e) {
+      // code가 유효하지 않거나 재사용된 경우에도 다음 단계로 진행(리다이렉트)
+      console.error("[oauth callback] exchange error:", e);
     }
   }
 
-  // 세션 교환 후 서버가 사용자 식별 가능
-  const { data } = await supabase.auth.getUser();
-  const uid = data?.user?.id;
+  // uid 쿠키도 설정
+  try {
+    const { data } = await supa.auth.getUser();
+    const uid = data?.user?.id || "";
 
-  // 추가로 우리 앱에서 쓰는 uid HttpOnly 쿠키도 같이 굽기
-  if (uid) {
     const isProd =
       process.env.VERCEL_ENV === "production" ||
       process.env.NODE_ENV === "production";
 
-    res.cookies.set({
-      name: "uid",
-      value: uid,
-      httpOnly: true,
-      sameSite: "lax",
-      secure: isProd,
-      path: "/",
-      maxAge: 60 * 60 * 24 * 30, // 30일
-      ...(isProd ? { domain: ".inneros.co.kr" } : {}),
-    });
+    if (uid) {
+      const base = {
+        httpOnly: true,
+        sameSite: "lax" as const,
+        secure: isProd,
+        path: "/",
+        maxAge: 60 * 60 * 24 * 30,
+      };
+      // host-only
+      res.cookies.set({ name: "uid", value: uid, ...base });
+      // domain cookie (.inneros.co.kr)
+      if (isProd) {
+        res.cookies.set({
+          name: "uid",
+          value: uid,
+          ...base,
+          domain: ".inneros.co.kr",
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[oauth callback] getUser error:", e);
+    // uid 쿠키 없이도 리다이렉트는 진행 (미들웨어/ensure에서 재보정)
   }
 
   return res;
