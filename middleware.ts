@@ -52,7 +52,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // 3) 플랜 게이트(/start|/signature|/master)
+  // 3) /admin/* 경로는 로그인 필요 (관리자 체크는 페이지에서 수행)
+  if (pathname.startsWith("/admin/")) {
+    if (!uid) {
+      const signIn = new URL("/auth/sign-in", req.url);
+      signIn.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+      return NextResponse.redirect(signIn);
+    }
+    return NextResponse.next();
+  }
+
+  // 4) 플랜 게이트(/start|/signature|/master)
   const guard = GUARDS.find((g) => pathname === g.prefix || pathname.startsWith(`${g.prefix}/`));
   if (guard) {
     if (!uid) {
@@ -61,7 +71,7 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(signIn);
     }
 
-    // ✅ A안 요약 API 사용: /api/me/summary
+    // A안 요약 API 사용: /api/me/summary
     const apiUrl = new URL("/api/me/summary", req.url);
     const res = await fetch(apiUrl.toString(), {
       headers: { cookie: req.headers.get("cookie") || "" },
@@ -87,7 +97,7 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // 4) 나머지 경로는 통과
+  // 5) 나머지 경로는 통과
   return NextResponse.next();
 }
 
@@ -96,6 +106,7 @@ export const config = {
     "/auth/sign-in",
     "/auth/sign-up",
     "/dashboard/:path*",
+    "/admin/:path*",
     "/start/:path*",
     "/signature/:path*",
     "/master/:path*",

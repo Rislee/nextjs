@@ -21,7 +21,12 @@ type Membership = {
 
 const ALL_PLANS: PlanId[] = ["START_OS", "SIGNATURE_OS", "MASTER_OS"];
 
-export default function DashboardClient() {
+interface DashboardClientProps {
+  isAdmin?: boolean;
+  userEmail?: string;
+}
+
+export default function DashboardClient({ isAdmin = false, userEmail = "" }: DashboardClientProps) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,8 +67,23 @@ export default function DashboardClient() {
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-8">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">내 계정</h1>
-        {/* 레이아웃 헤더에 AuthStatusButton 사용 중 */}
+        <div>
+          <h1 className="text-xl font-semibold">내 계정</h1>
+          {userEmail && (
+            <p className="text-sm text-gray-500 mt-1">{userEmail}</p>
+          )}
+        </div>
+        {isAdmin && (
+          <a
+            href="/admin/memberships"
+            className="inline-flex items-center gap-2 rounded-md bg-gray-900 text-white px-4 py-2 text-sm hover:bg-gray-800 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            관리자 페이지
+          </a>
+        )}
       </div>
 
       {/* 활성 OS(멤버십) */}

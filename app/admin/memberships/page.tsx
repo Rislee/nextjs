@@ -3,14 +3,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
-
-function isAdminEmail(email?: string | null) {
-  const list = (process.env.ADMIN_EMAILS || "")
-    .split(",")
-    .map((s) => s.trim().toLowerCase())
-    .filter(Boolean);
-  return !!email && list.includes(email.toLowerCase());
-}
+import { isAdminEmail } from "@/lib/admin";
 
 async function getCurrentUserEmail() {
   const ck = await cookies();
@@ -89,10 +82,15 @@ export default async function Page({
   if (!isAdminEmail(email))
     return (
       <main className="p-6">
-        <h1 className="text-lg font-semibold">접근 권한 없음</h1>
-        <p className="text-sm text-gray-600 mt-2">
-          관리자에게 권한을 요청하세요.
-        </p>
+        <div className="mx-auto max-w-2xl">
+          <h1 className="text-lg font-semibold text-red-600">접근 권한 없음</h1>
+          <p className="text-sm text-gray-600 mt-2">
+            관리자 권한이 필요합니다.
+          </p>
+          <a href="/dashboard" className="inline-block mt-4 rounded border px-3 py-1 text-sm hover:bg-gray-50">
+            대시보드로 돌아가기
+          </a>
+        </div>
       </main>
     );
 
@@ -117,7 +115,18 @@ export default async function Page({
 
   return (
     <main className="mx-auto max-w-2xl p-6 space-y-6">
-      <h1 className="text-xl font-semibold">멤버십 관리</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold">멤버십 관리</h1>
+        <a href="/dashboard" className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
+          대시보드로 돌아가기
+        </a>
+      </div>
+      
+      <div className="rounded-lg bg-amber-50 border border-amber-200 p-3">
+        <p className="text-sm text-amber-800">
+          🔐 관리자 전용 페이지 • {email}
+        </p>
+      </div>
 
       {/* 검색 */}
       <form method="GET" className="flex gap-2">
