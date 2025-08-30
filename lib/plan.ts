@@ -9,13 +9,13 @@ export const PLAN_TO_TITLE: Record<PlanId, string> = {
 export const PLAN_TO_FRAMER_URL: Record<PlanId, string> = {
   START_OS:
     process.env.NEXT_PUBLIC_FRAMER_START_URL ||
-    "https://www.inneros.co.kr/start",
+    "https://www.inneros.co.kr/start-os",
   SIGNATURE_OS:
     process.env.NEXT_PUBLIC_FRAMER_SIGNATURE_URL ||
-    "https://www.inneros.co.kr/signature",
+    "https://www.inneros.co.kr/signature-os",
   MASTER_OS:
     process.env.NEXT_PUBLIC_FRAMER_MASTER_URL ||
-    "https://www.inneros.co.kr/master",
+    "https://www.inneros.co.kr/master-os",
 };
 
 // 등급(낮음 → 높음)

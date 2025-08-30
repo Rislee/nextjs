@@ -18,9 +18,9 @@ function hasAccess(userPlan: Plan, required: Plan) {
 
 // 플랜 게이트 경로
 const GUARDS: Array<{ prefix: string; required: Plan }> = [
-  { prefix: "/start", required: "START_OS" },
-  { prefix: "/signature", required: "SIGNATURE_OS" },
-  { prefix: "/master", required: "MASTER_OS" },
+  { prefix: "/start-os", required: "START_OS" },
+  { prefix: "/signature-os", required: "SIGNATURE_OS" },
+  { prefix: "/master-os", required: "MASTER_OS" },
 ];
 
 export async function middleware(req: NextRequest) {
@@ -107,8 +107,8 @@ export const config = {
     "/auth/sign-up",
     "/dashboard/:path*",
     "/admin/:path*",
-    "/start/:path*",
-    "/signature/:path*",
-    "/master/:path*",
+    "/start-os/:path*",
+    "/signature-os/:path*",
+    "/master-os/:path*",
   ],
 };
