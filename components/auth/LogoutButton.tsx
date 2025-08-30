@@ -16,10 +16,8 @@ export default function LogoutButton({ className }: { className?: string }) {
 
   async function onLogout() {
     try {
-      // 1) Supabase 세션 로그아웃
-      await supabase.auth.signOut();
-      // 2) 서버 uid 쿠키 제거
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
+      await supabase.auth.signOut(); // Supabase 세션
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }); // uid 쿠키 제거
     } finally {
       router.replace('/auth/sign-in');
     }

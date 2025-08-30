@@ -3,10 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import ProfileForm from "../../app/dashboard/ProfileForm";
+import LogoutButton from "@/components/auth/LogoutButton";
 import type { PlanId } from "@/lib/plan";
 import { PLAN_TO_TITLE } from "@/lib/plan";
-import LogoutButton from "@/components/auth/LogoutButton";
-
 
 type Payment = {
   id: string;
@@ -33,7 +32,6 @@ export default function DashboardClient() {
   useEffect(() => {
     (async () => {
       setLoading(true);
-      // 내 결제내역 (RLS로 user_id=auth.uid()만 조회)
       const { data, error } = await supabase
         .from("payments")
         .select("id, plan_id, status, amount, currency, created_at")
@@ -46,8 +44,13 @@ export default function DashboardClient() {
 
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-8">
-      <section>
+      {/* 헤더 + 로그아웃 버튼 */}
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">내 정보</h1>
+        <LogoutButton />
+      </div>
+
+      <section>
         <ProfileForm />
       </section>
 
@@ -62,10 +65,6 @@ export default function DashboardClient() {
             {payments.map((p) => (
               <li key={p.id} className="flex items-center justify-between p-3 text-sm">
                 <div>
-                  <div className="flex items-center justify-between">
-                    <h1 className="text-xl font-semibold">내 정보</h1>
-                    <LogoutButton />
-                  </div>
                   <div className="font-medium">{PLAN_TO_TITLE[p.plan_id]}</div>
                   <div className="text-xs text-gray-500">
                     {new Date(p.created_at).toLocaleString()} • {p.status}

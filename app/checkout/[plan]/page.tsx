@@ -1,33 +1,37 @@
 'use client';
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createBrowserClient } from "@supabase/ssr";
 import { requestIamportPay } from "@/lib/portone/v1-client";
 import type { PlanId } from "@/lib/plan";
 import { hasAccessOrHigher } from "@/lib/plan";
 
+type Stage = "checking" | "eligible" | "starting" | "paying" | "done" | "error";
+
 export default function CheckoutPlanPage() {
   const { plan } = useParams<{ plan: PlanId }>();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
 
   const supabase = useMemo(
-    () => createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ),
+    () =>
+      createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
     []
   );
 
+  const [stage, setStage] = useState<Stage>("checking");
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
+  // 1) 세션/멤버십 체크
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      // 1) 세션/uid 쿠키 보정
-      const ensure = await fetch("/api/session/ensure", {
-        method: "GET",
-        credentials: "include",
-      });
+      setStage("checking");
+      // 세션 보정
+      const ensure = await fetch("/api/session/ensure", { method: "GET", credentials: "include" });
       if (cancelled) return;
 
       if (ensure.status === 401) {
@@ -36,7 +40,7 @@ export default function CheckoutPlanPage() {
         return;
       }
 
-      // 2) 활성 멤버십이면 즉시 대시보드로 이동
+      // 활성 멤버십이면 대시보드로
       const { data: membership } = await supabase
         .from("memberships")
         .select("plan_id,status")
@@ -47,17 +51,16 @@ export default function CheckoutPlanPage() {
         return;
       }
 
-      setReady(true);
+      setStage("eligible");
     })();
     return () => { cancelled = true; };
   }, [plan, router, supabase]);
 
-  useEffect(() => {
-    if (!ready) return;
-    let cancelled = false;
+  const startOrderAndPay = useCallback(async () => {
+    try {
+      setErrorMsg("");
+      setStage("starting");
 
-    (async () => {
-      // 3) 주문 생성
       const res = await fetch("/api/checkout/start", {
         method: "POST",
         credentials: "include",
@@ -65,27 +68,67 @@ export default function CheckoutPlanPage() {
         body: JSON.stringify({ planId: plan }),
       });
 
-      if (cancelled) return;
-
-      // 서버에서도 재결제 차단: 409면 대시보드로
-      if (res.status === 409) {
-        router.replace("/dashboard");
+      if (res.status === 409) { // 이미 같은/더높은 멤버십
+        router.replace(`/dashboard?notice=already-active&target=${plan}`);
         return;
       }
+
       if (!res.ok) {
-        console.error("failed to start checkout", await res.text());
-        alert("주문 생성에 실패했습니다. 잠시 후 다시 시도해주세요.");
-        return;
+        const txt = await res.text();
+        throw new Error(`주문 생성 실패 (${res.status}) ${txt}`);
       }
 
       const { merchantUid, amount, orderName } = await res.json();
 
-      // 4) 아임포트 v1 결제 호출
+      setStage("paying");
       await requestIamportPay({ merchant_uid: merchantUid, amount, name: orderName });
-    })();
 
-    return () => { cancelled = true; };
-  }, [ready, plan, router]);
+      // 모바일은 redirect, PC는 콜백에서 완료 페이지로 이동함
+      // 여기까지 오면 브라우저가 이동 중일 가능성이 큼 → 안전상 마무리 상태만
+      setStage("done");
+    } catch (e: any) {
+      setErrorMsg(e?.message || "결제창 호출에 실패했습니다.");
+      setStage("error");
+    }
+  }, [plan, router]);
 
-  return null;
+  // 2) eligible이 되면 자동으로 한 번 시도 (팝업 차단 대비 UI도 제공)
+  useEffect(() => {
+    if (stage !== "eligible") return;
+    const t = setTimeout(() => { startOrderAndPay(); }, 300);
+    return () => clearTimeout(t);
+  }, [stage, startOrderAndPay]);
+
+  return (
+    <main className="mx-auto max-w-md p-6 text-sm">
+      {stage === "checking" && <p>사용자 확인 중…</p>}
+      {stage === "eligible" && <p>결제창을 열고 있어요… 잠시만요.</p>}
+      {stage === "starting" && <p>주문 생성 중…</p>}
+      {stage === "paying" && <p>결제창을 여는 중입니다…</p>}
+      {stage === "done" && <p>결제 완료 처리 중…</p>}
+
+      {stage === "error" && (
+        <div className="space-y-3">
+          <p className="text-red-600">{errorMsg}</p>
+          <button
+            onClick={startOrderAndPay}
+            className="rounded border px-3 py-1 hover:bg-gray-50"
+          >
+            결제창 다시 열기
+          </button>
+          <button
+            onClick={() => router.replace("/dashboard")}
+            className="ml-2 rounded border px-3 py-1 hover:bg-gray-50"
+          >
+            대시보드
+          </button>
+        </div>
+      )}
+
+      {/* 디버그 도움말 */}
+      <div className="mt-6 text-xs text-gray-500">
+        stage: {stage}
+      </div>
+    </main>
+  );
 }
