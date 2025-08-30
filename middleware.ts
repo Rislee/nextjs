@@ -1,41 +1,40 @@
-// middleware.ts
 import { NextRequest, NextResponse } from "next/server";
 
 export function middleware(req: NextRequest) {
-  const { pathname, search } = req.nextUrl;
+  const { pathname } = req.nextUrl;
+  const uid = req.cookies.get("uid")?.value || "";
 
-  // ✅ 인증/정적/API는 완전 우회
-  if (
-    pathname.startsWith("/api") ||
-    pathname.startsWith("/auth") ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/static") ||
-    pathname === "/favicon.ico" ||
-    pathname === "/robots.txt" ||
-    pathname === "/sitemap.xml"
-  ) {
+  // 1) 로그인 상태에서 로그인/회원가입 페이지 접근 시 우회
+  if (pathname === "/auth/sign-in" || pathname === "/auth/sign-up") {
+    if (uid) {
+      const next = req.nextUrl.searchParams.get("next") || "/dashboard";
+      return NextResponse.redirect(new URL(next, req.url));
+    }
     return NextResponse.next();
   }
 
-  // ✅ 멤버 전용 페이지만 게이트
-  const protectedPaths = ["/start", "/signature", "/master"];
-  const isProtected = protectedPaths.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+  // 2) 보호 경로 게이트 (로그인 필수)
+  const protectedPaths = ["/start", "/signature", "/master", "/dashboard"];
+  const isProtected = protectedPaths.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`)
+  );
 
-  if (!isProtected) return NextResponse.next();
-
-  const uid = req.cookies.get("uid")?.value;
-  if (!uid) {
-    const next = encodeURIComponent(pathname + search);
+  if (isProtected && !uid) {
+    const next = encodeURIComponent(pathname + req.nextUrl.search);
     return NextResponse.redirect(new URL(`/auth/sign-in?next=${next}`, req.url));
   }
 
-  // 필요 시 여기서 /api/membership/status 호출해 플랜 레벨 체크도 가능
   return NextResponse.next();
 }
 
-// ✅ matcher: 보호 경로만 감시
+// 이 미들웨어는 아래 경로에만 작동합니다(다른 경로/API/정적파일에는 영향 없음)
 export const config = {
-  matcher: ["/start/:path*", "/signature/:path*", "/master/:path*", "/dashboard/:path*"],
+  matcher: [
+    "/start/:path*",
+    "/signature/:path*",
+    "/master/:path*",
+    "/dashboard/:path*",
+    "/auth/sign-in",
+    "/auth/sign-up",
+  ],
 };
-
-
