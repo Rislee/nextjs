@@ -23,11 +23,11 @@ export async function GET(req: NextRequest) {
   const ck = await cookies();
   const res = NextResponse.json({ ok: true });
 
-  // 이미 uid 쿠키가 있으면 그대로 반환
+  // 이미 uid 쿠키가 있으면 그대로 반환 (단, 유효성 확인)
   const existingUid = ck.get("uid")?.value;
-  if (existingUid) {
-    console.log("uid cookie already exists:", existingUid);
-    return NextResponse.json({ ok: true, uid: existingUid });
+  if (existingUid && existingUid !== 'undefined' && existingUid.length > 10) {
+    console.log("Valid uid cookie already exists:", existingUid.substring(0, 8) + '...');
+    return NextResponse.json({ ok: true, uid: existingUid, source: 'existing_cookie' });
   }
 
   let uid: string | null = null;
@@ -37,46 +37,54 @@ export async function GET(req: NextRequest) {
   console.log("Bearer token exists:", !!bearer);
   
   if (bearer) {
-    const cli = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: { headers: { Authorization: `Bearer ${bearer}` } },
-        auth: { persistSession: false },
-      }
-    );
-    const { data, error } = await cli.auth.getUser();
-    uid = data?.user?.id ?? null;
-    console.log("Bearer auth result - uid:", uid, "error:", error?.message);
+    try {
+      const cli = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          global: { headers: { Authorization: `Bearer ${bearer}` } },
+          auth: { persistSession: false },
+        }
+      );
+      const { data, error } = await cli.auth.getUser();
+      uid = data?.user?.id ?? null;
+      console.log("Bearer auth result - uid:", uid ? uid.substring(0, 8) + '...' : null, "error:", error?.message);
+    } catch (e: any) {
+      console.log("Bearer auth error:", e.message);
+    }
   }
 
   // 2) 없으면(혹은 실패하면) 쿠키 기반으로 재시도
   if (!uid) {
     console.log("Trying cookie-based auth...");
-    const supa = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get: (name: string) => {
-            const value = ck.get(name)?.value;
-            console.log(`Cookie get - ${name}:`, value ? "exists" : "not found");
-            return value;
+    try {
+      const supa = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+          cookies: {
+            get: (name: string) => {
+              const value = ck.get(name)?.value;
+              console.log(`Cookie get - ${name}:`, value ? "exists" : "not found");
+              return value;
+            },
+            set: (name: string, value: string, options: any) => {
+              console.log(`Cookie set - ${name}`);
+              res.cookies.set({ name, value, ...options });
+            },
+            remove: (name: string, options: any) => {
+              console.log(`Cookie remove - ${name}`);
+              res.cookies.set({ name, value: "", ...options, maxAge: 0 });
+            },
           },
-          set: (name: string, value: string, options: any) => {
-            console.log(`Cookie set - ${name}`);
-            res.cookies.set({ name, value, ...options });
-          },
-          remove: (name: string, options: any) => {
-            console.log(`Cookie remove - ${name}`);
-            res.cookies.set({ name, value: "", ...options, maxAge: 0 });
-          },
-        },
-      }
-    );
-    const { data, error } = await supa.auth.getUser();
-    uid = data?.user?.id ?? null;
-    console.log("Cookie auth result - uid:", uid, "error:", error?.message);
+        }
+      );
+      const { data, error } = await supa.auth.getUser();
+      uid = data?.user?.id ?? null;
+      console.log("Cookie auth result - uid:", uid ? uid.substring(0, 8) + '...' : null, "error:", error?.message);
+    } catch (e: any) {
+      console.log("Cookie auth error:", e.message);
+    }
   }
 
   if (!uid) {
@@ -84,12 +92,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "no user found" }, { status: 401 });
   }
 
-  // 3) uid 쿠키를 host-only와 .inneros.co.kr 모두에 설정 (우선순위 충돌 방지)
+  // 3) uid 쿠키를 host-only와 .inneros.co.kr 모두에 설정
   const isProd =
     process.env.VERCEL_ENV === "production" ||
     process.env.NODE_ENV === "production";
 
-  console.log("Setting uid cookie for:", uid);
+  console.log("Setting uid cookie for:", uid.substring(0, 8) + '...');
   console.log("isProd:", isProd);
 
   const base = {
@@ -97,14 +105,14 @@ export async function GET(req: NextRequest) {
     sameSite: "lax" as const,
     secure: isProd,
     path: "/",
-    maxAge: 60 * 60 * 24 * 30,
+    maxAge: 60 * 60 * 24 * 30, // 30일
   };
 
-  // host-only
+  // host-only cookie
   res.cookies.set({ name: "uid", value: uid, ...base });
   console.log("Set host-only uid cookie");
   
-  // domain cookie
+  // domain cookie (production only)
   if (isProd) {
     res.cookies.set({
       name: "uid",
@@ -115,6 +123,25 @@ export async function GET(req: NextRequest) {
     console.log("Set domain uid cookie for .inneros.co.kr");
   }
 
-  console.log("Returning success with uid:", uid);
-  return res;
+  // 응답에 uid 포함하여 클라이언트에서도 확인 가능하게
+  const response = NextResponse.json({ 
+    ok: true, 
+    uid, 
+    source: bearer ? 'bearer_token' : 'session_cookie',
+    cookieSet: true 
+  });
+
+  // 응답에 쿠키 설정 다시 한번 확인
+  response.cookies.set({ name: "uid", value: uid, ...base });
+  if (isProd) {
+    response.cookies.set({
+      name: "uid",
+      value: uid,
+      ...base,
+      domain: ".inneros.co.kr",
+    });
+  }
+
+  console.log("Returning success with uid and cookies set");
+  return response;
 }

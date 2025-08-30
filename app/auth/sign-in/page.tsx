@@ -1,3 +1,4 @@
+// app/auth/sign-in/page.tsx
 'use client';
 
 import { Suspense, useCallback, useMemo, useState } from 'react';
@@ -33,6 +34,17 @@ function Content() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string>("");
 
+  const triggerAuthChange = () => {
+    // AuthStatusButton에게 상태 변화 알리기
+    try {
+      window.dispatchEvent(new CustomEvent('auth-status-changed'));
+      localStorage.setItem('auth_changed', Date.now().toString());
+      localStorage.removeItem('auth_changed');
+    } catch (e) {
+      // 무시
+    }
+  };
+
   const onEmailSignIn = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
@@ -40,28 +52,50 @@ function Content() {
     setErr("");
 
     try {
+      console.log('=== Starting login process ===');
+      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password: pw,
       });
       
       if (error) throw error;
+      
+      console.log('Supabase login success:', data.session ? 'Session created' : 'No session');
 
       // 세션이 생성될 때까지 잠시 대기
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
 
-      // ensure API 호출
+      // ensure API 호출로 uid 쿠키 동기화
       const token = data.session?.access_token || "";
-      await fetch('/api/session/ensure', {
+      console.log('Calling /api/session/ensure with token:', token ? 'Present' : 'None');
+      
+      const ensureRes = await fetch('/api/session/ensure', {
         method: 'GET',
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
 
-      // 페이지 이동
-      window.location.href = next || '/dashboard';
+      console.log('Ensure API response:', ensureRes.status, ensureRes.ok);
+      
+      if (ensureRes.ok) {
+        const ensureData = await ensureRes.json();
+        console.log('Ensure API data:', ensureData);
+        
+        // 상태 변화 알리기
+        triggerAuthChange();
+        
+        // 잠시 대기 후 이동 (상태 업데이트 시간 확보)
+        setTimeout(() => {
+          console.log('Redirecting to:', next || '/dashboard');
+          window.location.href = next || '/dashboard';
+        }, 300);
+      } else {
+        throw new Error('세션 동기화에 실패했습니다.');
+      }
       
     } catch (e: any) {
+      console.error('Login error:', e);
       setErr(e?.message || '로그인에 실패했습니다.');
       setLoading(false);
     }
