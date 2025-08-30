@@ -169,7 +169,7 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
         ) : (
           <ul className="divide-y rounded border mt-2">
             {payments.map((p) => (
-              <li key={p.id} className="flex items-center justify-between p-3 text-sm">
+              <li key={p.id} className="p-3 text-sm">
                 <div>
                   <div className="font-medium">{PLAN_TO_TITLE[p.plan_id]}</div>
                   <div className="text-xs text-gray-500">
@@ -179,12 +179,6 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
                       : ""}
                   </div>
                 </div>
-                <a
-                  className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                  href={`/go/${p.plan_id}`}
-                >
-                  이용하기
-                </a>
               </li>
             ))}
           </ul>
