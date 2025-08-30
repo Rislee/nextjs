@@ -10,9 +10,9 @@ export const revalidate = 0;
 type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 
 const PRICE: Record<PlanId, number> = {
-  START_OS: 1000,          // 테스트 금액
-  SIGNATURE_OS: 11000000,
-  MASTER_OS: 22000000,
+  START_OS: 5500000,          
+  SIGNATURE_OS: 22000000,
+  MASTER_OS: 55000000,
 };
 
 const PLAN_LEVEL: Record<PlanId, number> = {
