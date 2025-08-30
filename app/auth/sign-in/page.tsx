@@ -45,45 +45,23 @@ function Content() {
         password: pw,
       });
       
-      if (error) {
-        console.error("Login error:", error);
-        throw error;
-      }
+      if (error) throw error;
 
-      // 로그인 성공 확인
-      console.log("Login success, user:", data.user?.email);
-      console.log("Session exists:", !!data.session);
-      
       // 세션이 생성될 때까지 잠시 대기
       await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // 세션 확인
-      const { data: sessionData } = await supabase.auth.getSession();
-      console.log("Current session after login:", !!sessionData.session);
 
       // ensure API 호출
       const token = data.session?.access_token || "";
-      console.log("Calling /api/session/ensure with token:", !!token);
-      
-      const ensureRes = await fetch('/api/session/ensure', {
+      await fetch('/api/session/ensure', {
         method: 'GET',
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      
-      const ensureData = await ensureRes.json();
-      console.log("Ensure response:", ensureRes.status, ensureData);
-      
-      if (!ensureRes.ok) {
-        throw new Error('세션 동기화 실패: ' + (ensureData.error || 'unknown'));
-      }
 
       // 페이지 이동
-      console.log("Redirecting to:", next || '/dashboard');
       window.location.href = next || '/dashboard';
       
     } catch (e: any) {
-      console.error("Login error:", e);
       setErr(e?.message || '로그인에 실패했습니다.');
       setLoading(false);
     }
