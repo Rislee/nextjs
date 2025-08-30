@@ -2,9 +2,10 @@
 
 import { Suspense, useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
+import { createBrowserClient } from '@supabase/ssr';
 
-const supabase = createClient(
+// createClient 대신 createBrowserClient 사용
+const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
@@ -43,18 +44,46 @@ function Content() {
         email,
         password: pw,
       });
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Login error:", error);
+        throw error;
+      }
 
+      // 로그인 성공 확인
+      console.log("Login success, user:", data.user?.email);
+      console.log("Session exists:", !!data.session);
+      
+      // 세션이 생성될 때까지 잠시 대기
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // 세션 확인
+      const { data: sessionData } = await supabase.auth.getSession();
+      console.log("Current session after login:", !!sessionData.session);
+
+      // ensure API 호출
       const token = data.session?.access_token || "";
-      await fetch('/api/session/ensure', {
+      console.log("Calling /api/session/ensure with token:", !!token);
+      
+      const ensureRes = await fetch('/api/session/ensure', {
         method: 'GET',
         credentials: 'include',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      
+      const ensureData = await ensureRes.json();
+      console.log("Ensure response:", ensureRes.status, ensureData);
+      
+      if (!ensureRes.ok) {
+        throw new Error('세션 동기화 실패: ' + (ensureData.error || 'unknown'));
+      }
 
-      // window.location.href로 변경하여 쿠키 확실히 적용
+      // 페이지 이동
+      console.log("Redirecting to:", next || '/dashboard');
       window.location.href = next || '/dashboard';
+      
     } catch (e: any) {
+      console.error("Login error:", e);
       setErr(e?.message || '로그인에 실패했습니다.');
       setLoading(false);
     }
