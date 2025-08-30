@@ -2,6 +2,7 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
+// 플랜 레벨 정의
 const PLAN_ORDER = ["FREE", "START_OS", "SIGNATURE_OS", "MASTER_OS"] as const;
 type Plan = (typeof PLAN_ORDER)[number];
 type Status = "active" | "past_due" | "canceled" | "none";
@@ -15,6 +16,7 @@ function hasAccess(userPlan: Plan, required: Plan) {
   return PLAN_ORDER.indexOf(userPlan) >= PLAN_ORDER.indexOf(required);
 }
 
+// 플랜 게이트 경로
 const GUARDS: Array<{ prefix: string; required: Plan }> = [
   { prefix: "/start", required: "START_OS" },
   { prefix: "/signature", required: "SIGNATURE_OS" },
@@ -22,39 +24,78 @@ const GUARDS: Array<{ prefix: string; required: Plan }> = [
 ];
 
 export async function middleware(req: NextRequest) {
-  // /api/* 는 항상 우회
-  if (req.nextUrl.pathname.startsWith("/api/")) return NextResponse.next();
+  const { pathname } = req.nextUrl;
 
-  const guard = GUARDS.find(g => req.nextUrl.pathname.startsWith(g.prefix));
-  if (!guard) return NextResponse.next();
+  // 0) /api/* 는 항상 우회
+  if (pathname.startsWith("/api/")) return NextResponse.next();
 
-  // 현재 사용자 멤버십 조회(서버 API)
-  const res = await fetch(new URL("/api/membership/status", req.url), {
-    headers: { Cookie: req.headers.get("cookie") || "" },
-    cache: "no-store",
-  });
+  // 공통 쿠키 상태
+  const uid = req.cookies.get("uid")?.value || "";
+  const hasSb = req.cookies.getAll().some((c) => c.name.startsWith("sb-") && !!c.value);
 
-  if (!res.ok) {
-    const signIn = new URL("/auth/sign-in", req.url); // ✅ 경로 교정
-    signIn.searchParams.set("next", req.nextUrl.pathname);
-    return NextResponse.redirect(signIn);
+  // 1) 로그인/회원가입 화면: "진짜 로그인 상태( uid + sb-* )"면 우회
+  if (pathname === "/auth/sign-in" || pathname === "/auth/sign-up") {
+    if (uid && hasSb) {
+      const next = req.nextUrl.searchParams.get("next") || "/dashboard";
+      return NextResponse.redirect(new URL(next, req.url));
+    }
+    return NextResponse.next();
   }
 
-  const json = (await res.json()) as { plan?: string; status?: string };
-  const plan = toPlan(json.plan);
-  const status = (json.status ?? "none") as Status;
-
-  const allowed = status === "active" && hasAccess(plan, guard.required);
-  if (!allowed) {
-    const up = new URL("/upgrade", req.url);
-    return NextResponse.redirect(up);
+  // 2) /dashboard 는 "로그인만" 필요
+  if (pathname === "/dashboard" || pathname.startsWith("/dashboard/")) {
+    if (!uid) {
+      const signIn = new URL("/auth/sign-in", req.url);
+      signIn.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+      return NextResponse.redirect(signIn);
+    }
+    return NextResponse.next();
   }
 
+  // 3) 플랜 게이트(/start|/signature|/master)
+  const guard = GUARDS.find((g) => pathname === g.prefix || pathname.startsWith(`${g.prefix}/`));
+  if (guard) {
+    if (!uid) {
+      const signIn = new URL("/auth/sign-in", req.url);
+      signIn.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+      return NextResponse.redirect(signIn);
+    }
+
+    // ✅ A안 요약 API 사용: /api/me/summary
+    const apiUrl = new URL("/api/me/summary", req.url);
+    const res = await fetch(apiUrl.toString(), {
+      headers: { cookie: req.headers.get("cookie") || "" },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      // 요약 API가 401/에러면 로그인 요구
+      const signIn = new URL("/auth/sign-in", req.url);
+      signIn.searchParams.set("next", req.nextUrl.pathname + req.nextUrl.search);
+      return NextResponse.redirect(signIn);
+    }
+
+    const json = await res.json();
+    const membership = json?.membership || null;
+    const plan = toPlan(membership?.plan_id);
+    const status = (membership?.status ?? "none") as Status;
+
+    const allowed = status === "active" && hasAccess(plan, guard.required);
+    if (!allowed) {
+      // 권한 부족 → 업그레이드로
+      return NextResponse.redirect(new URL("/upgrade", req.url));
+    }
+  }
+
+  // 4) 나머지 경로는 통과
   return NextResponse.next();
 }
 
 export const config = {
   matcher: [
+    "/auth/sign-in",
+    "/auth/sign-up",
+    "/dashboard/:path*",
     "/start/:path*",
     "/signature/:path*",
     "/master/:path*",
