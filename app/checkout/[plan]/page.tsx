@@ -236,9 +236,6 @@ export default function CheckoutPlanPage() {
               <button onClick={checkAndProceed} className="rounded border px-3 py-1 hover:bg-gray-50">
                 다시 확인
               </button>
-              <a href={loginUrl} className="rounded border px-3 py-1 hover:bg-gray-50">
-                로그인 하러가기
-              </a>
               <button onClick={() => router.push("/dashboard")} className="rounded border px-3 py-1 hover:bg-gray-50">
                 대시보드
               </button>
