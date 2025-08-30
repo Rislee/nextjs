@@ -5,6 +5,8 @@ import { createBrowserClient } from "@supabase/ssr";
 import ProfileForm from "../../app/dashboard/ProfileForm";
 import type { PlanId } from "@/lib/plan";
 import { PLAN_TO_TITLE } from "@/lib/plan";
+import LogoutButton from "@/components/auth/LogoutButton";
+
 
 type Payment = {
   id: string;
@@ -60,6 +62,10 @@ export default function DashboardClient() {
             {payments.map((p) => (
               <li key={p.id} className="flex items-center justify-between p-3 text-sm">
                 <div>
+                  <div className="flex items-center justify-between">
+                    <h1 className="text-xl font-semibold">내 정보</h1>
+                    <LogoutButton />
+                  </div>
                   <div className="font-medium">{PLAN_TO_TITLE[p.plan_id]}</div>
                   <div className="text-xs text-gray-500">
                     {new Date(p.created_at).toLocaleString()} • {p.status}
