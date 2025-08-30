@@ -1,15 +1,22 @@
 // app/api/chat/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import OpenAI from "openai";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY!,
-});
+// OpenAI 클라이언트를 런타임에만 초기화
+let openai: any = null;
+
+function getOpenAIClient() {
+  if (!openai) {
+    const OpenAI = require('openai');
+    openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+    });
+  }
+  return openai;
+}
 
 // 플랜별 설정
 const PLAN_CONFIG = {
@@ -45,6 +52,15 @@ export async function OPTIONS() {
 
 export async function POST(req: NextRequest) {
   try {
+    // 환경변수 확인
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY is missing");
+      return NextResponse.json(
+        { error: "server_configuration_error" },
+        { status: 500, headers: CORS_HEADERS }
+      );
+    }
+
     const { message, planId, token } = await req.json();
 
     // 1. 입력 검증
@@ -120,7 +136,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. OpenAI 쓰레드 가져오기 또는 생성
+    // 4. OpenAI 클라이언트 초기화 및 쓰레드 처리
+    const openaiClient = getOpenAIClient();
     let threadId: string;
     
     const { data: threadData } = await supabaseAdmin
@@ -134,7 +151,7 @@ export async function POST(req: NextRequest) {
       threadId = threadData.thread_id;
     } else {
       // 새 쓰레드 생성
-      const thread = await openai.beta.threads.create();
+      const thread = await openaiClient.beta.threads.create();
       threadId = thread.id;
       
       // DB에 저장
@@ -149,28 +166,33 @@ export async function POST(req: NextRequest) {
     }
 
     // 5. 메시지 추가 및 실행
-    await openai.beta.threads.messages.create(threadId, {
+    await openaiClient.beta.threads.messages.create(threadId, {
       role: "user",
       content: message
     });
 
-    const run = await openai.beta.threads.runs.create(threadId, {
+    const run = await openaiClient.beta.threads.runs.create(threadId, {
       assistant_id: config.assistant_id
     });
 
     // 6. 실행 완료 대기
-    let runStatus = await openai.beta.threads.runs.retrieve(run.id, {
+    let runStatus = await openaiClient.beta.threads.runs.retrieve(run.id, {
       thread_id: threadId
     });
     
-    while (runStatus.status === 'in_progress' || runStatus.status === 'queued') {
+    let attempts = 0;
+    const maxAttempts = 30; // 30초 최대 대기
+    
+    while ((runStatus.status === 'in_progress' || runStatus.status === 'queued') && attempts < maxAttempts) {
       await new Promise(resolve => setTimeout(resolve, 1000));
-      runStatus = await openai.beta.threads.runs.retrieve(run.id, {
+      runStatus = await openaiClient.beta.threads.runs.retrieve(run.id, {
         thread_id: threadId
       });
+      attempts++;
     }
 
     if (runStatus.status !== 'completed') {
+      console.error("AI run failed:", runStatus.status, runStatus.last_error);
       return NextResponse.json(
         { error: "ai_processing_failed", status: runStatus.status },
         { status: 500, headers: CORS_HEADERS }
@@ -178,15 +200,15 @@ export async function POST(req: NextRequest) {
     }
 
     // 7. 응답 메시지 가져오기
-    const messages = await openai.beta.threads.messages.list(threadId, {
+    const messages = await openaiClient.beta.threads.messages.list(threadId, {
       order: 'desc',
       limit: 1
     });
 
     const assistantMessage = messages.data[0];
     const responseText = assistantMessage.content
-      .filter(content => content.type === 'text')
-      .map(content => content.text.value)
+      .filter((content: any) => content.type === 'text')
+      .map((content: any) => content.text.value)
       .join('\n');
 
     // 8. 사용량 증가
@@ -201,15 +223,20 @@ export async function POST(req: NextRequest) {
       });
 
     // 9. 대화 기록 저장 (선택사항)
-    await supabaseAdmin
-      .from("chat_conversations")
-      .insert({
-        user_id: userId,
-        plan_id: planId,
-        thread_id: threadId,
-        user_message: message,
-        assistant_message: responseText
-      });
+    try {
+      await supabaseAdmin
+        .from("chat_conversations")
+        .insert({
+          user_id: userId,
+          plan_id: planId,
+          thread_id: threadId,
+          user_message: message,
+          assistant_message: responseText
+        });
+    } catch (e) {
+      // 대화 기록 저장 실패해도 응답은 반환
+      console.error("Failed to save conversation:", e);
+    }
 
     // 10. 응답 반환
     const remaining = config.dailyLimit - currentUsage - 1;
