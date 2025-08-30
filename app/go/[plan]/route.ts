@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
-import { PLAN_TO_FRAMER_URL, hasSpecificAccess, type PlanId } from "@/lib/plan";
+import { PLAN_TO_FRAMER_URL, type PlanId } from "@/lib/plan";
 
 export const dynamic = "force-dynamic";
 
@@ -27,33 +27,40 @@ export async function GET(
     return NextResponse.redirect(signIn);
   }
 
-  // 2. 멤버십 체크
-  const { data: membership } = await supabaseAdmin
-    .from("memberships")
+  // 2. 사용자의 활성 플랜들 조회 (다중 플랜 지원)
+  const { data: userPlans } = await supabaseAdmin
+    .from("user_plans")
     .select("plan_id, status")
     .eq("user_id", uid)
-    .maybeSingle();
+    .eq("status", "active");
 
-  if (!membership || membership.status !== "active") {
-    // 멤버십 없음 - 결제 페이지로
+  console.log(`[/go/${plan}] User ${uid} has plans:`, userPlans);
+
+  if (!userPlans || userPlans.length === 0) {
+    console.log(`[/go/${plan}] No active plans found, redirecting to checkout`);
+    // 활성 플랜 없음 - 결제 페이지로
     const checkout = new URL(`/checkout/${plan}`, req.url);
     return NextResponse.redirect(checkout);
   }
 
-  // 3. 개별 플랜 권한 체크 - 정확히 해당 플랜을 보유하고 있는지 확인
-  const userPlan = membership.plan_id as PlanId;
-  if (!hasSpecificAccess(userPlan, plan)) {
+  // 3. 해당 플랜 권한 확인
+  const hasTargetPlan = userPlans.some(p => p.plan_id === plan);
+  
+  if (!hasTargetPlan) {
+    console.log(`[/go/${plan}] User doesn't have ${plan}, has:`, userPlans.map(p => p.plan_id));
     // 해당 플랜 권한 없음 - 결제 페이지로
     const checkout = new URL(`/checkout/${plan}`, req.url);
     return NextResponse.redirect(checkout);
   }
 
+  console.log(`[/go/${plan}] Access granted, redirecting to Framer`);
+
   // 4. 모든 체크 통과 - Framer 페이지로 리디렉션
-  // 임시 토큰 생성 (선택사항)
+  // 임시 토큰 생성
   const token = Buffer.from(JSON.stringify({
     uid,
-    plan: userPlan,
     targetPlan: plan,
+    userPlans: userPlans.map(p => p.plan_id),
     timestamp: Date.now(),
     expires: Date.now() + 60000 // 1분 유효
   })).toString('base64');

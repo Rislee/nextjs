@@ -191,9 +191,6 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
               <p className="text-gray-600 mb-2">
                 모든 플랜을 보유하고 계십니다.
               </p>
-              <p className="text-xs text-gray-500">
-                관리자가 수동으로 권한을 부여한 경우에도 여기에서 활성 상태로 표시됩니다.
-              </p>
             </div>
           )}
         </div>
