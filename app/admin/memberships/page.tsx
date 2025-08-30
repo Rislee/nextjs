@@ -122,6 +122,8 @@ export default async function Page({
 
   const q = (searchParams?.q || "").trim();
   let userPlans: any[] = [];
+  let searchError = "";
+  let userExists = false;
 
   if (q) {
     const admin = createAdminClient(
@@ -130,12 +132,31 @@ export default async function Page({
       { auth: { persistSession: false } }
     );
     
-    const { data, error } = await admin.rpc("admin_get_user_plans", {
-      p_email: q,
-    });
-    
-    if (!error && data) {
-      userPlans = data as any[];
+    try {
+      // 먼저 사용자 존재 여부 확인
+      const { data: userInfo, error: userError } = await admin.rpc("admin_get_user_info", {
+        p_email: q,
+      });
+      
+      if (userError) {
+        searchError = `사용자 검색 오류: ${userError.message}`;
+      } else if (!userInfo || userInfo.length === 0) {
+        searchError = `이메일을 찾을 수 없습니다: ${q}`;
+      } else {
+        userExists = true;
+        // 사용자가 존재하면 플랜 정보 조회
+        const { data: planData, error: planError } = await admin.rpc("admin_get_user_plans", {
+          p_email: q,
+        });
+        
+        if (planError) {
+          searchError = `플랜 정보 조회 오류: ${planError.message}`;
+        } else {
+          userPlans = planData || [];
+        }
+      }
+    } catch (error: any) {
+      searchError = `시스템 오류: ${error.message}`;
     }
   }
 
@@ -180,8 +201,27 @@ export default async function Page({
       {/* 결과 */}
       {!q ? (
         <p className="text-sm text-gray-500">이메일로 검색하세요.</p>
-      ) : userPlans.length === 0 ? (
-        <p className="text-sm text-red-600">해당 이메일의 사용자가 없거나 활성 플랜이 없습니다.</p>
+      ) : searchError ? (
+        <div className="rounded border border-red-200 bg-red-50 p-4">
+          <p className="text-sm text-red-600">{searchError}</p>
+          <details className="mt-2">
+            <summary className="text-xs text-gray-500 cursor-pointer">디버깅 정보</summary>
+            <div className="mt-2 text-xs text-gray-600">
+              <div>검색한 이메일: {q}</div>
+              <div>사용자 존재: {userExists ? 'Yes' : 'No'}</div>
+              <div>플랜 데이터: {userPlans.length}개</div>
+            </div>
+          </details>
+        </div>
+      ) : !userExists ? (
+        <div className="rounded border border-yellow-200 bg-yellow-50 p-4">
+          <p className="text-sm text-yellow-800">
+            해당 이메일로 가입한 사용자를 찾을 수 없습니다: <strong>{q}</strong>
+          </p>
+          <p className="text-xs text-yellow-700 mt-1">
+            사용자가 먼저 회원가입을 해야 플랜을 부여할 수 있습니다.
+          </p>
+        </div>
       ) : (
         <div className="space-y-4">
           {/* 사용자 정보 */}
