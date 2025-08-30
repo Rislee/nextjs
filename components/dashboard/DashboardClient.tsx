@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import LogoutButton from "@/components/auth/LogoutButton";
 import type { PlanId } from "@/lib/plan";
-import { PLAN_TO_TITLE } from "@/lib/plan";
+import { PLAN_TO_TITLE, PLAN_LEVEL } from "@/lib/plan";
 
 type Payment = {
   id: string;
@@ -19,6 +20,8 @@ type Membership = {
   status: "active" | "past_due" | "canceled" | "none" | null;
   updated_at: string | null;
 };
+
+const ALL_PLANS: PlanId[] = ["START_OS", "SIGNATURE_OS", "MASTER_OS"];
 
 export default function DashboardClient() {
   const supabase = useMemo(
@@ -48,7 +51,7 @@ export default function DashboardClient() {
       setLoadingPay(false);
     })();
 
-    // 멤버십 (1행)
+    // 멤버십 1행
     (async () => {
       setLoadingMem(true);
       const { data, error } = await supabase
@@ -64,11 +67,19 @@ export default function DashboardClient() {
 
   const memActive = membership?.status === "active" && !!membership?.plan_id;
 
+  const upgradeCandidates: PlanId[] = useMemo(() => {
+    if (!memActive) return [];
+    const cur = membership!.plan_id as PlanId;
+    const curLvl = PLAN_LEVEL[cur];
+    return ALL_PLANS.filter((p) => PLAN_LEVEL[p] > curLvl);
+  }, [memActive, membership]);
+
   return (
     <main className="mx-auto max-w-3xl p-6 space-y-8">
       {/* 헤더 */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">내 계정</h1>
+        <LogoutButton />
       </div>
 
       {/* 활성 OS(멤버십) */}
@@ -78,24 +89,44 @@ export default function DashboardClient() {
         {loadingMem ? (
           <p className="text-sm text-gray-500">멤버십 정보를 불러오는 중…</p>
         ) : memActive ? (
-          <div className="rounded border p-4 text-sm flex items-center justify-between">
-            <div>
-              <div className="font-medium">
-                {PLAN_TO_TITLE[membership!.plan_id as PlanId]}
+          <div className="rounded border p-4 text-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-medium">
+                  {PLAN_TO_TITLE[membership!.plan_id as PlanId]}
+                </div>
+                <div className="text-xs text-gray-500">
+                  상태: <span className="text-green-700">active</span>
+                  {membership?.updated_at
+                    ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}`
+                    : ""}
+                </div>
               </div>
-              <div className="text-xs text-gray-500">
-                상태: <span className="text-green-700">active</span>
-                {membership?.updated_at
-                  ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}`
-                  : ""}
-              </div>
+              <a
+                className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                href={`/go/${membership!.plan_id}`}
+              >
+                이용하기
+              </a>
             </div>
-            <a
-              className="rounded-md border px-3 py-1 hover:bg-gray-50"
-              href={`/go/${membership!.plan_id}`}
-            >
-              이용하기
-            </a>
+
+            {/* 업그레이드 버튼들 */}
+            {upgradeCandidates.length > 0 && (
+              <div className="pt-2 border-t">
+                <div className="mb-2 text-xs text-gray-600">업그레이드</div>
+                <div className="flex flex-wrap gap-2">
+                  {upgradeCandidates.map((p) => (
+                    <a
+                      key={p}
+                      className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                      href={`/checkout/${p}`}
+                    >
+                      {PLAN_TO_TITLE[p]}로 업그레이드
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded border p-4 text-sm">
@@ -109,22 +140,13 @@ export default function DashboardClient() {
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <a
-                className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                href="/checkout/START_OS"
-              >
+              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/START_OS">
                 START OS 구매
               </a>
-              <a
-                className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                href="/checkout/SIGNATURE_OS"
-              >
+              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/SIGNATURE_OS">
                 SIGNATURE OS 구매
               </a>
-              <a
-                className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                href="/checkout/MASTER_OS"
-              >
+              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/MASTER_OS">
                 MASTER OS 구매
               </a>
             </div>
@@ -155,7 +177,6 @@ export default function DashboardClient() {
                       : ""}
                   </div>
                 </div>
-                {/* 결제가 paid라도, 현재 멤버십 상태와 무관하게 내역만 표시 */}
                 <a
                   className="rounded-md border px-3 py-1 hover:bg-gray-50"
                   href={`/go/${p.plan_id}`}

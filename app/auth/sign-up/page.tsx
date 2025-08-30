@@ -1,101 +1,116 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { useCallback, useMemo, useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 export default function SignUpPage() {
-  const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
-    []
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-600">회원가입 초기화 중…</div>}>
+      <Content />
+    </Suspense>
   );
+}
 
-  const [name, setName] = useState('');
+function Content() {
+  const router = useRouter();
+  const sp = useSearchParams();
+
+  const next = sp.get('next') || '';
+  const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [pw, setPw] = useState('');
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState('');
+  const [notice, setNotice] = useState<string>("");
 
-  async function syncUidCookie() {
-    const session = await supabase.auth.getSession();
-    const access = session.data.session?.access_token;
-    if (!access) return;
-    await fetch('/api/auth/sync', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${access}` },
-      credentials: 'include',
-    });
-  }
-
-  const onSubmit = async (e: React.FormEvent) => {
+  const onSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    setMsg('');
+    if (loading) return;
+    setLoading(true);
+    setNotice("");
+
     try {
-      setLoading(true);
       const { data, error } = await supabase.auth.signUp({
         email,
         password: pw,
-        options: { data: { full_name: name } },
+        options: {
+          data: { full_name: fullName || null },
+          emailRedirectTo: 'https://account.inneros.co.kr/auth/callback',
+        },
       });
+
       if (error) throw error;
 
-      // 이메일 확인 요구 ON인 프로젝트면 data.user가 null일 수 있음
-      if (data.user) {
-        // profiles upsert
-        await supabase.from('profiles').upsert({ id: data.user.id, full_name: name });
-        await syncUidCookie();
-        setMsg('가입 완료! 대시보드로 이동해 주세요.');
+      // 이메일 확인이 꺼져 있으면 즉시 세션이 생깁니다.
+      // 켜져 있으면 세션이 없고, 메일 확인 후 돌아오게 됩니다.
+      const session = data.session;
+      if (session) {
+        // uid 쿠키 동기화 후 이동
+        await fetch('/api/session/ensure', { method: 'GET', credentials: 'include' });
+        router.replace(next || '/dashboard');
       } else {
-        setMsg('가입 이메일이 발송되었습니다. 메일을 확인해 주세요.');
+        setNotice("회원가입이 완료되었습니다. 이메일의 인증 링크를 확인해 주세요.");
       }
-    } catch (e: any) {
-      setMsg(e.message || '가입 실패');
+    } catch (err: any) {
+      alert(err?.message || '회원가입 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [email, pw, fullName, next, router, loading]);
 
   return (
     <main className="mx-auto max-w-sm p-6">
-      <h1 className="text-xl font-semibold mb-4">회원가입</h1>
-      <form onSubmit={onSubmit} className="space-y-3">
+      <h1 className="text-xl font-semibold">회원가입</h1>
+
+      <form onSubmit={onSubmit} className="mt-4 space-y-3">
         <input
+          type="text"
+          placeholder="이름 (선택)"
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
           className="w-full rounded border px-3 py-2 text-sm"
-          placeholder="이름"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
         />
         <input
           type="email"
-          className="w-full rounded border px-3 py-2 text-sm"
           placeholder="이메일"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          autoComplete="email"
           required
+          className="w-full rounded border px-3 py-2 text-sm"
         />
         <input
           type="password"
-          className="w-full rounded border px-3 py-2 text-sm"
           placeholder="비밀번호"
           value={pw}
           onChange={(e) => setPw(e.target.value)}
-          autoComplete="new-password"
           required
+          className="w-full rounded border px-3 py-2 text-sm"
         />
         <button
           type="submit"
           disabled={loading}
           className="w-full rounded-md border px-4 py-2 text-sm hover:bg-gray-50"
         >
-          {loading ? '처리 중…' : '가입하기'}
+          {loading ? '가입 중…' : '회원가입'}
         </button>
       </form>
-      {msg && <p className="mt-3 text-sm text-gray-600">{msg}</p>}
+
+      {notice && <p className="mt-3 text-sm text-amber-700">{notice}</p>}
+
+      <div className="mt-4 text-xs text-gray-500">
+        이미 계정이 있으신가요?{" "}
+        <a
+          href={next ? `/auth/sign-in?next=${encodeURIComponent(next)}` : '/auth/sign-in'}
+          className="underline"
+        >
+          로그인
+        </a>
+      </div>
     </main>
   );
 }
