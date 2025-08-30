@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const ck = await cookies();
 
-  // 1) 로그인 사용자 확인 (세션 기반)
+  // 1) 로그인 사용자 확인 (sb-* 쿠키 기반)
   const supa = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -32,7 +32,7 @@ export async function GET() {
   // 2) 서비스 롤로 안전 조회 (RLS 무시)
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!, // 반드시 Vercel에 설정
     { auth: { persistSession: false } }
   );
 
@@ -46,8 +46,7 @@ export async function GET() {
       .from("payments")
       .select("id,plan_id,status,amount,currency,created_at")
       .eq("user_id", uid)
-      // ⬇️ 여기! descending 대신 ascending:false 사용
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: false }) // 최신 우선
       .limit(50),
   ]);
 

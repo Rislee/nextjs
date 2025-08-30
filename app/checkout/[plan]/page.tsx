@@ -75,38 +75,48 @@ export default function CheckoutPlanPage() {
   }, [checkAndProceed]);
 
   const startOrderAndPay = useCallback(async () => {
-    try {
-      setErrorMsg("");
-      setStage("starting");
+  try {
+    setErrorMsg("");
+    setStage("starting");
 
-      const res = await fetch("/api/checkout/start", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ planId: plan }),
-      });
+    const res = await fetch("/api/checkout/start", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ planId: plan }),
+    });
 
-      if (res.status === 409) {
-        router.replace(`/dashboard?notice=already-active&target=${plan}`);
-        return;
-      }
-
-      if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(`주문 생성 실패 (${res.status}) ${txt}`);
-      }
-
-      const { merchantUid, amount, orderName } = await res.json();
-
-      setStage("paying");
-      await requestIamportPay({ merchant_uid: merchantUid, amount, name: orderName });
-
-      setStage("done");
-    } catch (e: any) {
-      setErrorMsg(e?.message || "결제창 호출에 실패했습니다.");
-      setStage("error");
+    if (res.status === 409) {
+      router.replace(`/dashboard?notice=already-active&target=${plan}`);
+      return;
     }
-  }, [plan, router]);
+
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error(`주문 생성 실패 (${res.status}) ${txt}`);
+    }
+
+    const { merchantUid, amount, orderName } = await res.json();
+
+    // ✅ m_redirect_url 로 사용할 절대 URL
+    const redirectUrl =
+      process.env.NEXT_PUBLIC_PORTONE_REDIRECT_URL ||
+      `${window.location.origin}/checkout/complete`;
+
+    setStage("paying");
+    await requestIamportPay({
+      merchant_uid: merchantUid,
+      amount,
+      name: orderName,
+      redirectUrl,            // ⬅️ 이 줄 추가!
+    });
+
+    setStage("done");
+  } catch (e: any) {
+    setErrorMsg(e?.message || "결제창 호출에 실패했습니다.");
+    setStage("error");
+  }
+}, [plan, router]);
 
   useEffect(() => {
     if (stage !== "eligible") return;

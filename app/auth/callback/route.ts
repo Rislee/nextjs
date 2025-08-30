@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const next = url.searchParams.get("next") || "/dashboard";
-  const code = url.searchParams.get("code") || ""; // ⬅️ code 명시적으로 받기
+  const code = url.searchParams.get("code") || "";
 
   const res = NextResponse.redirect(new URL(next, req.url));
 
@@ -16,7 +16,6 @@ export async function GET(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
-      // Next Response에 쿠키를 다시 써주는 어댑터
       cookies: {
         get: (name: string) => req.cookies.get(name)?.value,
         set: (name: string, value: string, options: any) => {
@@ -29,21 +28,19 @@ export async function GET(req: NextRequest) {
     }
   );
 
-  // OAuth code → 세션 교환 (sb-* 쿠키 설정)
+  // 1) OAuth code → 세션 교환(sb-* 쿠키 세팅)
   if (code) {
     try {
-      await supa.auth.exchangeCodeForSession(code); // ⬅️ code 전달
+      await supa.auth.exchangeCodeForSession(code);
     } catch (e) {
-      // code가 유효하지 않거나 재사용된 경우에도 다음 단계로 진행(리다이렉트)
       console.error("[oauth callback] exchange error:", e);
     }
   }
 
-  // uid 쿠키도 설정
+  // 2) uid 쿠키도 추가(호스트/도메인 모두)
   try {
     const { data } = await supa.auth.getUser();
     const uid = data?.user?.id || "";
-
     const isProd =
       process.env.VERCEL_ENV === "production" ||
       process.env.NODE_ENV === "production";
@@ -58,7 +55,7 @@ export async function GET(req: NextRequest) {
       };
       // host-only
       res.cookies.set({ name: "uid", value: uid, ...base });
-      // domain cookie (.inneros.co.kr)
+      // domain cookie
       if (isProd) {
         res.cookies.set({
           name: "uid",
@@ -70,7 +67,6 @@ export async function GET(req: NextRequest) {
     }
   } catch (e) {
     console.error("[oauth callback] getUser error:", e);
-    // uid 쿠키 없이도 리다이렉트는 진행 (미들웨어/ensure에서 재보정)
   }
 
   return res;

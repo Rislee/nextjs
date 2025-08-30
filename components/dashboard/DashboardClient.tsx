@@ -63,7 +63,7 @@ export default function DashboardClient() {
     <main className="mx-auto max-w-3xl p-6 space-y-8">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-semibold">내 계정</h1>
-        {/* 레이아웃에 AuthStatusButton 사용 중 */}
+        {/* 레이아웃 헤더에 AuthStatusButton 사용 중 */}
       </div>
 
       {/* 활성 OS(멤버십) */}
@@ -75,13 +75,20 @@ export default function DashboardClient() {
           <div className="rounded border p-4 text-sm space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="font-medium">{PLAN_TO_TITLE[membership!.plan_id as PlanId]}</div>
+                <div className="font-medium">
+                  {PLAN_TO_TITLE[membership!.plan_id as PlanId]}
+                </div>
                 <div className="text-xs text-gray-500">
                   상태: <span className="text-green-700">active</span>
-                  {membership?.updated_at ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}` : ""}
+                  {membership?.updated_at
+                    ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}`
+                    : ""}
                 </div>
               </div>
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href={`/go/${membership!.plan_id}`}>
+              <a
+                className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                href={`/go/${membership!.plan_id}`}
+              >
                 이용하기
               </a>
             </div>
@@ -91,7 +98,11 @@ export default function DashboardClient() {
                 <div className="mb-2 text-xs text-gray-600">업그레이드</div>
                 <div className="flex flex-wrap gap-2">
                   {upgradeCandidates.map((p) => (
-                    <a key={p} className="rounded-md border px-3 py-1 hover:bg-gray-50" href={`/checkout/${p}`}>
+                    <a
+                      key={p}
+                      className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                      href={`/checkout/${p}`}
+                    >
                       {PLAN_TO_TITLE[p]}로 업그레이드
                     </a>
                   ))}
@@ -105,14 +116,25 @@ export default function DashboardClient() {
             {membership?.status && membership.status !== "active" ? (
               <div className="text-xs text-gray-500 mb-3">
                 현재 상태: {membership.status}
-                {membership?.updated_at ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}` : ""}
+                {membership?.updated_at
+                  ? ` • 업데이트: ${new Date(membership.updated_at).toLocaleString()}`
+                  : ""}
               </div>
             ) : null}
             <div className="flex flex-wrap gap-2">
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/START_OS">START OS 구매</a>
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/SIGNATURE_OS">SIGNATURE OS 구매</a>
-              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/MASTER_OS">MASTER OS 구매</a>
+              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/START_OS">
+                START OS 구매
+              </a>
+              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/SIGNATURE_OS">
+                SIGNATURE OS 구매
+              </a>
+              <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href="/checkout/MASTER_OS">
+                MASTER OS 구매
+              </a>
             </div>
+            <p className="mt-2 text-xs text-gray-500">
+              관리자가 수동으로 권한을 부여한 경우에도 여기에서 활성 상태로 표시됩니다.
+            </p>
           </div>
         )}
       </section>
@@ -132,10 +154,15 @@ export default function DashboardClient() {
                   <div className="font-medium">{PLAN_TO_TITLE[p.plan_id]}</div>
                   <div className="text-xs text-gray-500">
                     {new Date(p.created_at).toLocaleString()} • {p.status}
-                    {typeof p.amount === "number" ? ` • ${p.amount.toLocaleString()} ${p.currency || "KRW"}` : ""}
+                    {typeof p.amount === "number"
+                      ? ` • ${p.amount.toLocaleString()} ${p.currency || "KRW"}`
+                      : ""}
                   </div>
                 </div>
-                <a className="rounded-md border px-3 py-1 hover:bg-gray-50" href={`/go/${p.plan_id}`}>
+                <a
+                  className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                  href={`/go/${p.plan_id}`}
+                >
                   이용하기
                 </a>
               </li>

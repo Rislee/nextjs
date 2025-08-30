@@ -14,82 +14,77 @@ export async function POST(req: Request) {
     const { impUid, merchantUid }: Body = await req.json();
     if (!impUid) return NextResponse.json({ ok: false, error: 'missing_imp_uid' }, { status: 400 });
 
+    // 1) PortOne v1 결제 조회
     const token = await getV1AccessToken();
-    const pay = await getV1Payment(impUid, token);
+    const pay = await getV1Payment(impUid, token); // {imp_uid, merchant_uid, status, amount, ...}
 
-    if (merchantUid && pay.merchant_uid !== merchantUid) {
+    // merchant_uid 불일치 시도는 기록하고 에러 처리(중요)
+    if (merchantUid && pay.merchant_uid && merchantUid !== pay.merchant_uid) {
       return NextResponse.json({ ok: false, error: 'merchant_mismatch' }, { status: 400 });
     }
 
-    const now = new Date().toISOString();
+    // 2) DB의 대상 주문 찾기(merchant_uid로 1건)
+    const q = await supabaseAdmin
+      .from('payments')
+      .select('id, user_id, plan_id, status')
+      .eq('merchant_uid', pay.merchant_uid)
+      .maybeSingle();
 
-    // payments 업데이트 (없는 경우 대비 upsert 유사 로직)
+    if (q.error || !q.data) {
+      return NextResponse.json({ ok: false, step: 'payments.select', detail: q.error || 'not_found' }, { status: 404 });
+    }
+
+    // 실패/취소는 실패로 반영
+    if (pay.status === 'failed' || pay.status === 'cancelled') {
+      await supabaseAdmin
+        .from('payments')
+        .update({
+          status: pay.status,
+          portone_payment_id: pay.imp_uid,
+          failure: { reason: pay.fail_reason || null },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('merchant_uid', pay.merchant_uid);
+
+      return NextResponse.json({ ok: false, status: pay.status, failure: { reason: pay.fail_reason || null } });
+    }
+
+    // 아직 ready(결제전)면 대기
+    if (pay.status !== 'paid') {
+      return NextResponse.json({ ok: false, status: pay.status });
+    }
+
+    // 3) paid → payments 업데이트
     const up = await supabaseAdmin
       .from('payments')
       .update({
-        status: pay.status === 'paid' ? 'paid' : (pay.status as any),
+        status: 'paid',
         portone_payment_id: pay.imp_uid,
-        amount: pay.amount,
+        amount: pay.amount ?? null,     // ✅ 컬럼명: amount
         currency: pay.currency ?? 'KRW',
-        failure: pay.status === 'failed' ? { reason: pay.fail_reason || 'failed' } : null,
-        updated_at: now,
+        failure: null,
+        updated_at: new Date().toISOString(),
       })
       .eq('merchant_uid', pay.merchant_uid)
-      .select('id, user_id, plan_id')
-      .maybeSingle();
+      .select('id');
 
-    let userId: string | null = null;
-    let planId: string | null = null;
-
-    if (up.data) {
-      userId = (up.data as any).user_id || null;
-      planId = (up.data as any).plan_id || null;
-    } else {
-      // 행이 없다면 삽입 (웹훅 선행 등 경계 상황 보정)
-      const ins = await supabaseAdmin
-        .from('payments')
-        .insert({
-          merchant_uid: pay.merchant_uid,
-          portone_payment_id: pay.imp_uid,
-          status: pay.status === 'paid' ? 'paid' : (pay.status as any),
-          amount: pay.amount,
-          currency: pay.currency ?? 'KRW',
-          failure: pay.status === 'failed' ? { reason: pay.fail_reason || 'failed' } : null,
-          updated_at: now,
-        })
-        .select('id, user_id, plan_id')
-        .maybeSingle();
-      if (!ins.error) {
-        userId = (ins.data as any)?.user_id || null;
-        planId = (ins.data as any)?.plan_id || null;
-      }
+    if (up.error) {
+      return NextResponse.json({ ok: false, step: 'payments.update', detail: up.error }, { status: 500 });
     }
 
-    // 결제가 'paid'일 때 멤버십 활성화 (userId/planId가 있는 경우에만)
-    if (pay.status === 'paid') {
-      if (!userId || !planId) {
-        // payments에서 user/plan 정보 조회
-        const q = await supabaseAdmin
-          .from('payments')
-          .select('user_id, plan_id')
-          .eq('merchant_uid', pay.merchant_uid)
-          .maybeSingle();
-        if (q.data) {
-          userId = q.data.user_id as string | null;
-          planId = q.data.plan_id as string | null;
-        }
-      }
-      if (userId && planId) {
-        await supabaseAdmin
-          .from('memberships')
-          .upsert(
-            { user_id: userId, plan_id: planId, status: 'active', updated_at: now },
-            { onConflict: 'user_id' },
-          );
-      }
+    // 4) 멤버십 활성화(upsert)
+    const now = new Date().toISOString();
+    const up2 = await supabaseAdmin
+      .from('memberships')
+      .upsert(
+        { user_id: q.data.user_id, plan_id: q.data.plan_id, status: 'active', updated_at: now },
+        { onConflict: 'user_id' }
+      );
+    if (up2.error) {
+      return NextResponse.json({ ok: false, step: 'memberships.upsert', detail: up2.error }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, status: pay.status });
+    return NextResponse.json({ ok: true, status: 'paid', amount: pay.amount ?? null, currency: pay.currency ?? 'KRW' });
   } catch (e: any) {
     console.error('verify error', e);
     return NextResponse.json({ ok: false, error: e?.message ?? 'verify_failed' }, { status: 500 });
