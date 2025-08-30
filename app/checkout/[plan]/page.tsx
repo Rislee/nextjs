@@ -8,7 +8,7 @@ import { requestIamportPay } from "@/lib/portone/v1-client";
 import type { PlanId } from "@/lib/plan";
 import { hasAccessOrHigher } from "@/lib/plan";
 
-type Stage = "checking" | "eligible" | "starting" | "paying" | "done" | "error";
+type Stage = "checking" | "signin" | "eligible" | "starting" | "paying" | "done" | "error";
 
 export default function CheckoutPlanPage() {
   const { plan } = useParams<{ plan: PlanId }>();
@@ -26,30 +26,45 @@ export default function CheckoutPlanPage() {
   const [stage, setStage] = useState<Stage>("checking");
   const [errorMsg, setErrorMsg] = useState<string>("");
 
+  const loginUrl = useMemo(
+    () => `/auth/sign-in?next=${encodeURIComponent(`/checkout/${plan}`)}`,
+    [plan]
+  );
+
   // 1) 세션/멤버십 체크
   const checkAndProceed = useCallback(async () => {
     try {
       setStage("checking");
       setErrorMsg("");
 
-      // 세션 보정
-      const ensure = await fetch("/api/session/ensure", { method: "GET", credentials: "include" });
+      // ✅ 타임아웃/취소 가능한 fetch
+      const ac = new AbortController();
+      const tid = setTimeout(() => ac.abort(), 5000);
+      const ensure = await fetch("/api/session/ensure", {
+        method: "GET",
+        credentials: "include",
+        signal: ac.signal,
+      }).catch((e) => {
+        throw new Error(e?.name === "AbortError" ? "세션 확인 타임아웃" : e?.message);
+      });
+      clearTimeout(tid);
+
       if (ensure.status === 401) {
-        const next = encodeURIComponent(`/checkout/${plan}`);
-        router.replace(`/auth/sign-in?next=${next}`);
+        // ✅ 확실한 이동 + 버튼 fallback
+        if (typeof window !== "undefined") {
+          window.location.assign(loginUrl);
+        } else {
+          router.replace(loginUrl);
+        }
+        setStage("signin");
         return;
       }
 
       // 활성 멤버십이면 대시보드로
-      const { data: membership, error } = await supabase
+      const { data: membership } = await supabase
         .from("memberships")
         .select("plan_id,status")
         .maybeSingle();
-
-      if (error) {
-        // 읽기 실패해도 결제가 막히면 안 되므로 콘솔만 찍고 진행
-        console.warn("[memberships read error]", error);
-      }
 
       if (membership?.status === "active" && membership?.plan_id && hasAccessOrHigher(membership.plan_id as PlanId, plan)) {
         router.replace("/dashboard");
@@ -61,7 +76,7 @@ export default function CheckoutPlanPage() {
       setErrorMsg(e?.message || "초기 확인 중 오류가 발생했습니다.");
       setStage("error");
     }
-  }, [plan, router, supabase]);
+  }, [loginUrl, plan, router, supabase]);
 
   useEffect(() => {
     checkAndProceed();
@@ -101,7 +116,7 @@ export default function CheckoutPlanPage() {
     }
   }, [plan, router]);
 
-  // eligible 되면 자동으로 한 번 시도 (팝업 차단 대비 UI 제공)
+  // eligible 되면 자동으로 한 번 결제 시도
   useEffect(() => {
     if (stage !== "eligible") return;
     const t = setTimeout(() => { startOrderAndPay(); }, 300);
@@ -111,6 +126,19 @@ export default function CheckoutPlanPage() {
   return (
     <main className="mx-auto max-w-md p-6 text-sm">
       {stage === "checking" && <p>사용자 확인 중…</p>}
+
+      {stage === "signin" && (
+        <div className="space-y-3">
+          <p>로그인이 필요합니다.</p>
+          <a
+            href={loginUrl}
+            className="inline-block rounded border px-3 py-1 hover:bg-gray-50"
+          >
+            로그인 하러가기
+          </a>
+        </div>
+      )}
+
       {stage === "eligible" && <p>결제창을 열고 있어요… 잠시만요.</p>}
       {stage === "starting" && <p>주문 생성 중…</p>}
       {stage === "paying" && <p>결제창을 여는 중입니다…</p>}
@@ -123,9 +151,9 @@ export default function CheckoutPlanPage() {
             <button onClick={checkAndProceed} className="rounded border px-3 py-1 hover:bg-gray-50">
               다시 확인
             </button>
-            <button onClick={startOrderAndPay} className="rounded border px-3 py-1 hover:bg-gray-50">
-              결제창 다시 열기
-            </button>
+            <a href={loginUrl} className="rounded border px-3 py-1 hover:bg-gray-50">
+              로그인 하러가기
+            </a>
             <button onClick={() => router.replace("/dashboard")} className="rounded border px-3 py-1 hover:bg-gray-50">
               대시보드
             </button>
