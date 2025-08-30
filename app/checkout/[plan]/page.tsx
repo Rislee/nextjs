@@ -1,4 +1,4 @@
-// app/checkout/[plan]/page.tsx
+// app/checkout/[plan]/page.tsx (교체)
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,11 +15,10 @@ export default function CheckoutPlanPage() {
   const router = useRouter();
 
   const supabase = useMemo(
-    () =>
-      createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      ),
+    () => createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
     []
   );
 
@@ -31,13 +30,12 @@ export default function CheckoutPlanPage() {
     [plan]
   );
 
-  // 1) 세션/멤버십 체크
   const checkAndProceed = useCallback(async () => {
     try {
       setStage("checking");
       setErrorMsg("");
 
-      // ✅ 타임아웃/취소 가능한 fetch
+      // 세션 확인 (5초 타임아웃)
       const ac = new AbortController();
       const tid = setTimeout(() => ac.abort(), 5000);
       const ensure = await fetch("/api/session/ensure", {
@@ -50,13 +48,7 @@ export default function CheckoutPlanPage() {
       clearTimeout(tid);
 
       if (ensure.status === 401) {
-        // ✅ 확실한 이동 + 버튼 fallback
-        if (typeof window !== "undefined") {
-          window.location.assign(loginUrl);
-        } else {
-          router.replace(loginUrl);
-        }
-        setStage("signin");
+        setStage("signin"); // 🔸 자동 이동 없음 — 버튼만 표시
         return;
       }
 
@@ -76,7 +68,7 @@ export default function CheckoutPlanPage() {
       setErrorMsg(e?.message || "초기 확인 중 오류가 발생했습니다.");
       setStage("error");
     }
-  }, [loginUrl, plan, router, supabase]);
+  }, [plan, router, supabase]);
 
   useEffect(() => {
     checkAndProceed();
@@ -116,7 +108,6 @@ export default function CheckoutPlanPage() {
     }
   }, [plan, router]);
 
-  // eligible 되면 자동으로 한 번 결제 시도
   useEffect(() => {
     if (stage !== "eligible") return;
     const t = setTimeout(() => { startOrderAndPay(); }, 300);
@@ -130,12 +121,12 @@ export default function CheckoutPlanPage() {
       {stage === "signin" && (
         <div className="space-y-3">
           <p>로그인이 필요합니다.</p>
-          <a
-            href={loginUrl}
-            className="inline-block rounded border px-3 py-1 hover:bg-gray-50"
-          >
+          <a href={loginUrl} className="inline-block rounded border px-3 py-1 hover:bg-gray-50">
             로그인 하러가기
           </a>
+          <button onClick={checkAndProceed} className="ml-2 rounded border px-3 py-1 hover:bg-gray-50">
+            다시 확인
+          </button>
         </div>
       )}
 
