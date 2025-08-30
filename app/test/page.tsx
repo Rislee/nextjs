@@ -1,10 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export default function TestPage() {
   const [results, setResults] = useState<any>({});
   const [loading, setLoading] = useState(false);
+  const [currentCookies, setCurrentCookies] = useState<string>('');
+
+  // 클라이언트에서만 document 접근
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      setCurrentCookies(document.cookie || '(없음)');
+    }
+  }, [results]); // results 변경 시 쿠키도 업데이트
 
   const testAPI = async (endpoint: string) => {
     setLoading(true);
@@ -63,9 +71,11 @@ export default function TestPage() {
 
   const clearCookiesAndTest = async () => {
     // 브라우저에서 쿠키 정리
-    document.cookie.split(";").forEach(c => {
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
-    });
+    if (typeof document !== 'undefined') {
+      document.cookie.split(";").forEach(c => {
+        document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/");
+      });
+    }
     
     // API로도 정리
     await fetch('/api/auth/clear', { method: 'POST' });
@@ -106,7 +116,7 @@ export default function TestPage() {
       <section className="rounded border p-4">
         <h2 className="font-semibold mb-2">현재 쿠키</h2>
         <pre className="text-xs bg-gray-50 p-2 rounded overflow-x-auto">
-          {document.cookie || '(없음)'}
+          {currentCookies}
         </pre>
       </section>
 
