@@ -1,59 +1,50 @@
 // components/auth/AuthStatusButton.tsx
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { useEffect, useState } from 'react';
 import LogoutButton from '@/components/auth/LogoutButton';
 
 export default function AuthStatusButton() {
-  const supabase = useMemo(
-    () => createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ),
-    []
-  );
-  
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 초기 세션 확인
-    const checkSession = async () => {
-      try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        setLoggedIn(!!session);
-      } catch (error) {
-        console.error('Session check error:', error);
-        setLoggedIn(false);
-      } finally {
-        setLoading(false);
-      }
+    // uid 쿠키 직접 확인하는 함수
+    const checkAuthStatus = () => {
+      const cookies = document.cookie.split(';');
+      const uidCookie = cookies.find(cookie => 
+        cookie.trim().startsWith('uid=')
+      );
+      
+      const hasUid = uidCookie && uidCookie.split('=')[1]?.trim();
+      setLoggedIn(!!hasUid);
     };
 
-    checkSession();
+    // 초기 확인
+    checkAuthStatus();
 
-    // 인증 상태 변경 리스너
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('Auth state changed:', event, !!session);
-        setLoggedIn(!!session);
-        setLoading(false);
-      }
-    );
+    // 주기적으로 쿠키 상태 확인 (1초마다)
+    const interval = setInterval(checkAuthStatus, 1000);
+
+    // 스토리지 이벤트 리스너 (다른 탭에서 로그인/로그아웃 시)
+    const handleStorageChange = () => {
+      setTimeout(checkAuthStatus, 100);
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    
+    // 포커스 이벤트 리스너 (탭 전환 시 상태 재확인)
+    window.addEventListener('focus', checkAuthStatus);
 
     return () => {
-      subscription.unsubscribe();
+      clearInterval(interval);
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('focus', checkAuthStatus);
     };
-  }, [supabase]);
+  }, []);
 
-  // 로딩 중이거나 상태가 결정되지 않았으면 아무것도 표시하지 않음
-  if (loading || loggedIn === null) {
-    return (
-      <div className="rounded border px-3 py-1 text-sm bg-gray-100 text-gray-400">
-        확인중...
-      </div>
-    );
+  // 상태가 확인되지 않았으면 아무것도 표시하지 않음
+  if (loggedIn === null) {
+    return null;
   }
 
   return loggedIn ? (
