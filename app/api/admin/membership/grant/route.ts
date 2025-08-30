@@ -1,15 +1,42 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function getInternalKey(req: NextRequest) {
+  const h = req.headers;
+  const x = h.get("x-internal-key")?.trim();
+  const bearer = h.get("authorization")?.trim();
+  const fromBearer = bearer?.toLowerCase().startsWith("bearer ")
+    ? bearer.slice(7).trim()
+    : "";
+  return x || fromBearer || "";
+}
+
 export async function POST(req: NextRequest) {
-  const key = req.headers.get("x-internal-key");
-  if (key !== process.env.INTERNAL_API_KEY) {
-    return NextResponse.json({ ok:false, error:"forbidden" }, { status: 403 });
+  const provided = getInternalKey(req);
+  const expected = process.env.INTERNAL_API_KEY || "";
+
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, error: "server_internal_key_not_set" },
+      { status: 500 }
+    );
+  }
+  if (!provided || provided !== expected) {
+    return NextResponse.json(
+      { ok: false, error: "forbidden_invalid_internal_key" },
+      { status: 403 }
+    );
   }
 
   const { email, planId, status } = await req.json();
   if (!email || !planId) {
-    return NextResponse.json({ ok:false, error:"missing_params" }, { status: 400 });
+    return NextResponse.json(
+      { ok: false, error: "missing_params" },
+      { status: 400 }
+    );
   }
 
   const admin = createClient(
@@ -19,11 +46,13 @@ export async function POST(req: NextRequest) {
   );
 
   const { error } = await admin.rpc("admin_grant_membership", {
-    p_email: email, p_plan: planId, p_status: status || "active"
+    p_email: email,
+    p_plan: planId,
+    p_status: status || "active",
   });
 
   if (error) {
-    return NextResponse.json({ ok:false, error:error.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok:true });
+  return NextResponse.json({ ok: true });
 }
