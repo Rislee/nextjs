@@ -1,3 +1,4 @@
+// app/checkout/[plan]/page.tsx
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,14 +27,13 @@ export default function CheckoutPlanPage() {
   const [errorMsg, setErrorMsg] = useState<string>("");
 
   // 1) 세션/멤버십 체크
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const checkAndProceed = useCallback(async () => {
+    try {
       setStage("checking");
+      setErrorMsg("");
+
       // 세션 보정
       const ensure = await fetch("/api/session/ensure", { method: "GET", credentials: "include" });
-      if (cancelled) return;
-
       if (ensure.status === 401) {
         const next = encodeURIComponent(`/checkout/${plan}`);
         router.replace(`/auth/sign-in?next=${next}`);
@@ -41,10 +41,15 @@ export default function CheckoutPlanPage() {
       }
 
       // 활성 멤버십이면 대시보드로
-      const { data: membership } = await supabase
+      const { data: membership, error } = await supabase
         .from("memberships")
         .select("plan_id,status")
         .maybeSingle();
+
+      if (error) {
+        // 읽기 실패해도 결제가 막히면 안 되므로 콘솔만 찍고 진행
+        console.warn("[memberships read error]", error);
+      }
 
       if (membership?.status === "active" && membership?.plan_id && hasAccessOrHigher(membership.plan_id as PlanId, plan)) {
         router.replace("/dashboard");
@@ -52,9 +57,15 @@ export default function CheckoutPlanPage() {
       }
 
       setStage("eligible");
-    })();
-    return () => { cancelled = true; };
+    } catch (e: any) {
+      setErrorMsg(e?.message || "초기 확인 중 오류가 발생했습니다.");
+      setStage("error");
+    }
   }, [plan, router, supabase]);
+
+  useEffect(() => {
+    checkAndProceed();
+  }, [checkAndProceed]);
 
   const startOrderAndPay = useCallback(async () => {
     try {
@@ -68,7 +79,7 @@ export default function CheckoutPlanPage() {
         body: JSON.stringify({ planId: plan }),
       });
 
-      if (res.status === 409) { // 이미 같은/더높은 멤버십
+      if (res.status === 409) {
         router.replace(`/dashboard?notice=already-active&target=${plan}`);
         return;
       }
@@ -83,8 +94,6 @@ export default function CheckoutPlanPage() {
       setStage("paying");
       await requestIamportPay({ merchant_uid: merchantUid, amount, name: orderName });
 
-      // 모바일은 redirect, PC는 콜백에서 완료 페이지로 이동함
-      // 여기까지 오면 브라우저가 이동 중일 가능성이 큼 → 안전상 마무리 상태만
       setStage("done");
     } catch (e: any) {
       setErrorMsg(e?.message || "결제창 호출에 실패했습니다.");
@@ -92,7 +101,7 @@ export default function CheckoutPlanPage() {
     }
   }, [plan, router]);
 
-  // 2) eligible이 되면 자동으로 한 번 시도 (팝업 차단 대비 UI도 제공)
+  // eligible 되면 자동으로 한 번 시도 (팝업 차단 대비 UI 제공)
   useEffect(() => {
     if (stage !== "eligible") return;
     const t = setTimeout(() => { startOrderAndPay(); }, 300);
@@ -110,25 +119,21 @@ export default function CheckoutPlanPage() {
       {stage === "error" && (
         <div className="space-y-3">
           <p className="text-red-600">{errorMsg}</p>
-          <button
-            onClick={startOrderAndPay}
-            className="rounded border px-3 py-1 hover:bg-gray-50"
-          >
-            결제창 다시 열기
-          </button>
-          <button
-            onClick={() => router.replace("/dashboard")}
-            className="ml-2 rounded border px-3 py-1 hover:bg-gray-50"
-          >
-            대시보드
-          </button>
+          <div className="flex gap-2">
+            <button onClick={checkAndProceed} className="rounded border px-3 py-1 hover:bg-gray-50">
+              다시 확인
+            </button>
+            <button onClick={startOrderAndPay} className="rounded border px-3 py-1 hover:bg-gray-50">
+              결제창 다시 열기
+            </button>
+            <button onClick={() => router.replace("/dashboard")} className="rounded border px-3 py-1 hover:bg-gray-50">
+              대시보드
+            </button>
+          </div>
         </div>
       )}
 
-      {/* 디버그 도움말 */}
-      <div className="mt-6 text-xs text-gray-500">
-        stage: {stage}
-      </div>
+      <div className="mt-6 text-xs text-gray-500">stage: {stage}</div>
     </main>
   );
 }
