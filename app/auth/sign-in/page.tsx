@@ -1,8 +1,8 @@
 // app/auth/sign-in/page.tsx
 'use client';
 
-import { Suspense, useCallback, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useMemo, useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
 // createClient 대신 createBrowserClient 사용
@@ -21,12 +21,39 @@ export default function SignInPage() {
 
 function Content() {
   const sp = useSearchParams();
+  const router = useRouter();
 
   const next = sp.get('next') || '';
   const redirectTo = useMemo(() => {
     const base = 'https://account.inneros.co.kr/auth/callback';
     return next ? `${base}?next=${encodeURIComponent(next)}` : base;
   }, [next]);
+
+  // 이미 로그인 상태 확인
+  useEffect(() => {
+    const checkAuthStatus = async () => {
+      try {
+        const response = await fetch('/api/me/summary', { 
+          credentials: 'include',
+          cache: 'no-store'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          if (data.ok && data.uid) {
+            console.log('Already authenticated, redirecting to dashboard');
+            const targetUrl = next || '/dashboard';
+            router.replace(targetUrl);
+            return;
+          }
+        }
+      } catch (error) {
+        console.log('Auth check failed:', error);
+      }
+    };
+
+    checkAuthStatus();
+  }, [next, router]);
 
   // Email/Password
   const [email, setEmail] = useState('');
