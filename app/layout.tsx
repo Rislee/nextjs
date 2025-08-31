@@ -1,4 +1,3 @@
-// app/layout.tsx (필요 부분만 예시)
 import type { Metadata } from "next";
 import "./globals.css";
 import AuthStatusButton from "@/components/auth/AuthStatusButton";
@@ -13,7 +12,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <header className="border-b">
           <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-            <a href="/" className="text-sm font-semibold">InnerOS</a>
+            <a href="https://www.inneros.co.kr" className="text-sm font-semibold">InnerOS</a>
             <AuthStatusButton />
           </div>
         </header>
