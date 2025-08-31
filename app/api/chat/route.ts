@@ -8,6 +8,11 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
+// 기존 CORS_HEADERS 선언 아래에 추가
+export async function OPTIONS() {
+  return new Response(null, { status: 200, headers: CORS_HEADERS });
+}
+
 export async function POST(request: NextRequest) {
   console.log("=== Chat API POST request received ===");
   
