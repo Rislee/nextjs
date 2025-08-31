@@ -85,14 +85,14 @@ export default function ChatInterface({
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `안녕하세요! ${planTitle} 이전 대화를 이어서 진행하겠습니다. 무엇을 도와드릴까요?`,
+        content: `안녕하세요! ${planTitle} 이전 대화를 이어서 진행하겠습니다. 대화를 시작해 볼까요?`,
         timestamp: new Date()
       }]);
     } else {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `안녕하세요! ${planTitle}에 오신 것을 환영합니다. 무엇을 도와드릴까요?`,
+        content: `안녕하세요! ${planTitle}에 오신 것을 환영합니다. 대화를 시작해 볼까요?`,
         timestamp: new Date()
       }]);
     }
@@ -114,7 +114,7 @@ export default function ChatInterface({
       setMessages([{
         id: 'welcome-existing',
         role: 'assistant',
-        content: `이전 대화를 이어서 진행하겠습니다. 무엇을 도와드릴까요?`,
+        content: `이전 대화를 이어서 진행하겠습니다. 시작해 볼까요?`,
         timestamp: new Date()
       }]);
     }, 500);
@@ -126,7 +126,7 @@ export default function ChatInterface({
     setMessages([{
       id: 'welcome-new',
       role: 'assistant',
-      content: `안녕하세요! ${planTitle} 새로운 대화를 시작하겠습니다. 무엇을 도와드릴까요?`,
+      content: `안녕하세요! ${planTitle} 새로운 대화를 시작하겠습니다. 시작해 볼까요?`,
       timestamp: new Date()
     }]);
     setInput('');
