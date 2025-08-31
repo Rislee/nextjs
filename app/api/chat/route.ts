@@ -1,5 +1,7 @@
-// app/api/chat/route.ts
+// app/api/chat/route.ts - 세션 기반 버전
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 
 const CORS_HEADERS = {
@@ -8,7 +10,6 @@ const CORS_HEADERS = {
   "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
-// 기존 CORS_HEADERS 선언 아래에 추가
 export async function OPTIONS() {
   return new Response(null, { status: 200, headers: CORS_HEADERS });
 }
@@ -25,32 +26,58 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body = await request.json();
-    const { message, planId, token, threadId } = body; // threadId 추가
+    // 세션 기반 사용자 인증
+    const ck = await cookies();
+    const uid = ck.get("uid")?.value;
 
-    // 토큰 검증
-    let tokenData;
-    try {
-      const tokenStr = Buffer.from(token, 'base64').toString('utf8');
-      tokenData = JSON.parse(tokenStr);
-      
-      if (tokenData.expires && tokenData.expires < Date.now()) {
-        return NextResponse.json(
-          { error: "token_expired" },
-          { status: 401, headers: CORS_HEADERS }
-        );
-      }
-
-      if (!tokenData.userPlans || !tokenData.userPlans.includes(planId)) {
-        return NextResponse.json(
-          { error: "plan_access_denied" },
-          { status: 403, headers: CORS_HEADERS }
-        );
-      }
-    } catch (e) {
+    if (!uid) {
       return NextResponse.json(
-        { error: "invalid_token" },
+        { error: "unauthorized" },
         { status: 401, headers: CORS_HEADERS }
+      );
+    }
+
+    // Supabase에서 사용자 정보 및 권한 확인
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get: (name: string) => ck.get(name)?.value,
+          set() {},
+          remove() {},
+        },
+      }
+    );
+
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) {
+      return NextResponse.json(
+        { error: "invalid_session" },
+        { status: 401, headers: CORS_HEADERS }
+      );
+    }
+
+    const body = await request.json();
+    const { message, planId, threadId } = body;
+
+    // 플랜 권한 확인
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } }
+    );
+
+    const { data: userPlans } = await supabaseAdmin
+      .from("user_plans")
+      .select("plan_id, status")
+      .eq("user_id", uid)
+      .eq("status", "active");
+
+    if (!userPlans || !userPlans.some(p => p.plan_id === planId)) {
+      return NextResponse.json(
+        { error: "plan_access_denied" },
+        { status: 403, headers: CORS_HEADERS }
       );
     }
 
@@ -98,29 +125,20 @@ export async function POST(request: NextRequest) {
       console.log("New thread created:", currentThreadId);
       
       // Supabase에 thread 저장
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      
-      if (supabaseUrl && supabaseKey) {
-        try {
-          const supabase = createClient(supabaseUrl, supabaseKey, {
-            auth: { persistSession: false }
-          });
-          
-          await supabase.from('user_threads').upsert({
-            user_id: tokenData.uid,
-            plan_id: planId,
-            thread_id: currentThreadId,
-            last_message_at: new Date().toISOString(),
-            created_at: new Date().toISOString()
-          }, {
-            onConflict: 'user_id,plan_id'
-          });
-          
-          console.log("Thread saved to database");
-        } catch (dbError) {
-          console.error("Failed to save thread:", dbError);
-        }
+      try {
+        await supabaseAdmin.from('user_threads').upsert({
+          user_id: uid,
+          plan_id: planId,
+          thread_id: currentThreadId,
+          last_message_at: new Date().toISOString(),
+          created_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,plan_id'
+        });
+        
+        console.log("Thread saved to database");
+      } catch (dbError) {
+        console.error("Failed to save thread:", dbError);
       }
     } else {
       console.log("Using existing thread:", currentThreadId);
@@ -136,7 +154,6 @@ export async function POST(request: NextRequest) {
       
       if (!checkResponse.ok) {
         console.log("Thread not found, creating new one...");
-        // Thread가 없으면 새로 생성
         const threadResponse = await fetch('https://api.openai.com/v1/threads', {
           method: 'POST',
           headers: {
@@ -234,31 +251,22 @@ export async function POST(request: NextRequest) {
       .trim();
 
     // 사용량 기록
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    
-    if (supabaseUrl && supabaseKey && tokenData.uid) {
-      try {
-        const supabase = createClient(supabaseUrl, supabaseKey, {
-          auth: { persistSession: false }
-        });
-        
-        const today = new Date().toISOString().split('T')[0];
-        
-        await supabase.rpc('increment_chat_usage', {
-          p_user_id: tokenData.uid,
-          p_plan_id: planId,
-          p_date: today
-        });
-        
-        // Thread 최종 메시지 시간 업데이트
-        await supabase.from('user_threads').update({
-          last_message_at: new Date().toISOString()
-        }).eq('user_id', tokenData.uid).eq('plan_id', planId);
-        
-      } catch (usageError) {
-        console.error("Failed to record usage:", usageError);
-      }
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      await supabaseAdmin.rpc('increment_chat_usage', {
+        p_user_id: uid,
+        p_plan_id: planId,
+        p_date: today
+      });
+      
+      // Thread 최종 메시지 시간 업데이트
+      await supabaseAdmin.from('user_threads').update({
+        last_message_at: new Date().toISOString()
+      }).eq('user_id', uid).eq('plan_id', planId);
+      
+    } catch (usageError) {
+      console.error("Failed to record usage:", usageError);
     }
 
     return NextResponse.json(
