@@ -1,3 +1,4 @@
+// components/dashboard/DashboardClient.tsx
 'use client';
 
 import { useEffect, useState } from "react";
@@ -24,6 +25,11 @@ type ActivePlan = {
 interface DashboardClientProps {
   isAdmin?: boolean;
   userEmail?: string;
+}
+
+// 플랜 ID를 URL 파라미터로 변환
+function planToUrlParam(planId: PlanId): string {
+  return planId.toLowerCase().replace('_', '-'); // START_OS -> start-os
 }
 
 export default function DashboardClient({ isAdmin = false, userEmail = "" }: DashboardClientProps) {
@@ -144,8 +150,8 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
                     </div>
                   </div>
                   <a
-                    className="rounded-md border px-3 py-1 hover:bg-gray-50"
-                    href={`/go/${plan.plan_id}`}
+                    className="rounded-md border px-3 py-1 hover:bg-gray-50 transition-colors"
+                    href={`/chat/${planToUrlParam(plan.plan_id)}`}
                   >
                     이용하기
                   </a>
@@ -178,7 +184,7 @@ export default function DashboardClient({ isAdmin = false, userEmail = "" }: Das
                 {purchasablePlans.map((planId) => (
                   <a
                     key={planId}
-                    className="rounded-md border px-3 py-1 hover:bg-gray-50"
+                    className="rounded-md border px-3 py-1 hover:bg-gray-50 transition-colors"
                     href={`/checkout/${planId}`}
                   >
                     {PLAN_TO_TITLE[planId]} 구매
