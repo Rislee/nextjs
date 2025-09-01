@@ -1,4 +1,4 @@
-// app/api/chat/route.ts - 세션 기반 버전
+// app/api/chat/route.ts - 메시지 저장 기능 추가
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -124,16 +124,20 @@ export async function POST(request: NextRequest) {
       isNewThread = true;
       console.log("New thread created:", currentThreadId);
       
-      // Supabase에 thread 저장
+      // Supabase에 thread 저장 (제목은 첫 메시지의 일부로)
+      const threadTitle = message.length > 30 ? message.substring(0, 30) + '...' : message;
+      
       try {
         await supabaseAdmin.from('user_threads').upsert({
           user_id: uid,
           plan_id: planId,
           thread_id: currentThreadId,
+          title: threadTitle,
+          first_message: message,
           last_message_at: new Date().toISOString(),
           created_at: new Date().toISOString()
         }, {
-          onConflict: 'user_id,plan_id'
+          onConflict: 'user_id,plan_id,thread_id'
         });
         
         console.log("Thread saved to database");
@@ -170,7 +174,21 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 메시지 추가
+    // 사용자 메시지 저장 (DB)
+    try {
+      await supabaseAdmin.from('chat_messages').insert({
+        thread_id: currentThreadId,
+        user_id: uid,
+        plan_id: planId,
+        role: 'user',
+        content: message,
+      });
+      console.log("User message saved to database");
+    } catch (error) {
+      console.error("Failed to save user message:", error);
+    }
+
+    // 메시지 추가 (OpenAI)
     const messageResponse = await fetch(`https://api.openai.com/v1/threads/${currentThreadId}/messages`, {
       method: 'POST',
       headers: {
@@ -250,6 +268,20 @@ export async function POST(request: NextRequest) {
       .join("\n")
       .trim();
 
+    // AI 응답 메시지 저장 (DB)
+    try {
+      await supabaseAdmin.from('chat_messages').insert({
+        thread_id: currentThreadId,
+        user_id: uid,
+        plan_id: planId,
+        role: 'assistant',
+        content: responseText,
+      });
+      console.log("Assistant message saved to database");
+    } catch (error) {
+      console.error("Failed to save assistant message:", error);
+    }
+
     // 사용량 기록
     try {
       const today = new Date().toISOString().split('T')[0];
@@ -261,9 +293,13 @@ export async function POST(request: NextRequest) {
       });
       
       // Thread 최종 메시지 시간 업데이트
-      await supabaseAdmin.from('user_threads').update({
-        last_message_at: new Date().toISOString()
-      }).eq('user_id', uid).eq('plan_id', planId);
+      await supabaseAdmin.from('user_threads')
+        .update({
+          last_message_at: new Date().toISOString()
+        })
+        .eq('user_id', uid)
+        .eq('plan_id', planId)
+        .eq('thread_id', currentThreadId);
       
     } catch (usageError) {
       console.error("Failed to record usage:", usageError);

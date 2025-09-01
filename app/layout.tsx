@@ -21,7 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="inneros-page">
         <header className="inneros-header">
-          <div className="inneros-header-content">
+          <div className="inneros-header-content" style={{ borderBottom: 'none' }}>
             <a href="https://www.inneros.co.kr" className="inneros-logo">
               InnerOS
             </a>

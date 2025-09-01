@@ -1,4 +1,4 @@
-// app/api/chat/threads/route.ts
+// app/api/chat/threads/route.ts - 메시지 불러오기 기능 추가
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
     // 사용자의 쓰레드 목록 조회
     const { data: threads, error } = await supabaseAdmin
       .from("user_threads")
-      .select("thread_id, last_message_at, created_at")
+      .select("thread_id, title, first_message, last_message_at, created_at")
       .eq("user_id", uid)
       .eq("plan_id", planId)
       .order("last_message_at", { ascending: false })
@@ -96,14 +96,35 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // 쓰레드 정보를 클라이언트 형식으로 변환
-    const threadList = (threads || []).map((thread, index) => ({
-      id: thread.thread_id,
-      title: `대화 ${index + 1}`, // 실제로는 첫 번째 메시지에서 제목 추출 가능
-      lastMessage: "이전 대화...", // 실제로는 마지막 메시지 내용
-      updatedAt: new Date(thread.last_message_at || thread.created_at),
-      messageCount: 1, // 실제로는 메시지 수 계산 가능
-    }));
+    // 각 쓰레드의 메시지 수 조회
+    const threadList = await Promise.all(
+      (threads || []).map(async (thread, index) => {
+        // 각 쓰레드의 메시지 수 조회
+        const { count } = await supabaseAdmin
+          .from("chat_messages")
+          .select("*", { count: "exact", head: true })
+          .eq("thread_id", thread.thread_id)
+          .eq("user_id", uid);
+
+        // 마지막 메시지 조회
+        const { data: lastMessage } = await supabaseAdmin
+          .from("chat_messages")
+          .select("content, role, created_at")
+          .eq("thread_id", thread.thread_id)
+          .eq("user_id", uid)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+
+        return {
+          id: thread.thread_id,
+          title: thread.title || `대화 ${index + 1}`,
+          lastMessage: lastMessage?.content?.substring(0, 50) + (lastMessage?.content?.length > 50 ? '...' : '') || "대화가 시작되지 않았습니다",
+          updatedAt: new Date(thread.last_message_at || thread.created_at),
+          messageCount: count || 0,
+        };
+      })
+    );
 
     return NextResponse.json(
       {

@@ -65,6 +65,8 @@ export default function ChatInterface({
       if (response.ok) {
         const data = await response.json();
         setThreads(data.threads || []);
+      } else {
+        console.error('Failed to load threads:', response.status);
       }
     } catch (error) {
       console.error('Failed to load threads:', error);
@@ -83,14 +85,14 @@ export default function ChatInterface({
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `안녕하세요! ${planTitle} 이전 대화를 이어서 진행하겠습니다. 무엇을 도와드릴까요?`,
+        content: `안녕하세요! ${planTitle} 이전 대화를 이어서 진행하겠습니다. 대화를 시작해 볼까요?`,
         timestamp: new Date()
       }]);
     } else {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `안녕하세요! ${planTitle}에 오신 것을 환영합니다. 저는 당신의 Inner-OS AI 어시스턴트입니다. 무엇을 도와드릴까요?`,
+        content: `안녕하세요! ${planTitle}에 오신 것을 환영합니다. 새로운 대화를 시작해 볼까요?`,
         timestamp: new Date()
       }]);
     }
@@ -99,6 +101,7 @@ export default function ChatInterface({
   // 쓰레드 선택
   const selectThread = async (threadId: string) => {
     setCurrentThreadId(threadId);
+    setLoading(true);
     setMessages([{
       id: 'loading',
       role: 'assistant',
@@ -106,14 +109,44 @@ export default function ChatInterface({
       timestamp: new Date()
     }]);
 
-    setTimeout(() => {
+    try {
+      const response = await fetch(`/api/chat/threads/${threadId}/messages`, {
+        credentials: 'include',
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.messages && data.messages.length > 0) {
+          // 기존 메시지들을 불러와서 표시
+          setMessages(data.messages.map((msg: any) => ({
+            id: msg.id,
+            role: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp)
+          })));
+        } else {
+          // 메시지가 없으면 환영 메시지 표시
+          setMessages([{
+            id: 'welcome-existing',
+            role: 'assistant',
+            content: `이전 대화를 이어서 진행하겠습니다. 대화를 시작해 볼까요?`,
+            timestamp: new Date()
+          }]);
+        }
+      } else {
+        throw new Error('Failed to load messages');
+      }
+    } catch (error) {
+      console.error('Failed to load thread messages:', error);
       setMessages([{
-        id: 'welcome-existing',
+        id: 'error',
         role: 'assistant',
-        content: `이전 대화를 이어서 진행하겠습니다. 무엇을 도와드릴까요?`,
+        content: '이전 대화를 불러오는데 실패했습니다. 새로운 대화를 시작해 볼까요?',
         timestamp: new Date()
       }]);
-    }, 500);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // 새 대화 시작
@@ -122,7 +155,7 @@ export default function ChatInterface({
     setMessages([{
       id: 'welcome-new',
       role: 'assistant',
-      content: `안녕하세요! ${planTitle} 새로운 대화를 시작하겠습니다. 무엇을 도와드릴까요?`,
+      content: `안녕하세요! ${planTitle} 새로운 대화를 시작해 볼까요?`,
       timestamp: new Date()
     }]);
     setInput('');
@@ -256,7 +289,8 @@ export default function ChatInterface({
         left: 0,
         top: '72px', // 레이아웃 헤더 높이
         bottom: 0,
-        zIndex: 20
+        zIndex: 20,
+        overflow: 'hidden'
       }}>
         {sidebarOpen ? (
           // 열린 상태 - 기존 UI
@@ -264,7 +298,6 @@ export default function ChatInterface({
             {/* 사이드바 헤더 */}
             <div style={{ 
               padding: '20px',
-              borderBottom: '1px solid var(--border-primary)',
               background: 'var(--bg-secondary)'
             }}>
               <div style={{ 
@@ -381,33 +414,69 @@ export default function ChatInterface({
                     key={thread.id}
                     onClick={() => selectThread(thread.id)}
                     style={{
-                      background: currentThreadId === thread.id ? 'var(--accent-color)' : 'transparent',
-                      color: currentThreadId === thread.id ? 'white' : 'var(--text-primary)',
+                      background: 'transparent',
+                      color: 'var(--text-color)',
                       border: '1px solid transparent',
                       borderRadius: '8px',
                       padding: '12px',
                       cursor: 'pointer',
                       marginBottom: '8px',
                       width: '100%',
-                      textAlign: 'left'
+                      textAlign: 'left',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.background = 'var(--black-100)';
+                      e.currentTarget.style.color = 'var(--white)';
+                    }}
+                    onMouseOut={(e) => {
+                      if (currentThreadId !== thread.id) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-color)';
+                      }
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.background = 'var(--black-100)';
+                      e.currentTarget.style.color = 'var(--white)';
+                    }}
+                    onBlur={(e) => {
+                      if (currentThreadId !== thread.id) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-color)';
+                      }
                     }}
                   >
                     <div style={{ 
                       fontSize: '14px', 
                       fontWeight: '500', 
-                      marginBottom: '4px'
+                      marginBottom: '4px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: 'inherit'
                     }}>
                       {thread.title}
                     </div>
                     <div style={{ 
                       fontSize: '12px', 
-                      opacity: 0.7,
-                      marginBottom: '4px'
+                      marginBottom: '4px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: 'inherit',
+                      opacity: 0.7
                     }}>
                       {thread.lastMessage}
                     </div>
                     <div style={{ 
-                      fontSize: '11px', 
+                      fontSize: '11px',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: 'inherit',
                       opacity: 0.6
                     }}>
                       {thread.updatedAt.toLocaleDateString()} • {thread.messageCount}개
@@ -494,7 +563,6 @@ export default function ChatInterface({
         {/* 헤더 - 고정 */}
         <div style={{
           background: 'var(--bg-secondary)',
-          borderBottom: '1px solid var(--border-primary)',
           padding: '16px 24px',
           display: 'flex',
           alignItems: 'center',
@@ -547,12 +615,11 @@ export default function ChatInterface({
                 lineHeight: '1.5',
                 ...(message.role === 'user' ? {
                   background: 'var(--accent-color)',
-                  color: 'white',
+                  color: 'var(--black-100)',
                   alignSelf: 'flex-end',
                   marginLeft: 'auto'
                 } : {
                   background: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-primary)',
                   color: 'var(--text-primary)',
                   alignSelf: 'flex-start'
                 })
@@ -578,7 +645,6 @@ export default function ChatInterface({
               fontSize: '15px',
               lineHeight: '1.5',
               background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-primary)',
               color: 'var(--text-primary)',
               alignSelf: 'flex-start'
             }}>
@@ -624,7 +690,6 @@ export default function ChatInterface({
         {/* 입력 영역 - 고정 */}
         <div style={{
           background: 'var(--bg-secondary)',
-          borderTop: '1px solid var(--border-primary)',
           padding: '24px',
           position: 'fixed',
           bottom: 0,
@@ -663,7 +728,7 @@ export default function ChatInterface({
               style={{
                 flex: 1,
                 background: 'var(--bg-input)',
-                border: '1px solid var(--border-primary)',
+                border: 'none',
                 borderRadius: '12px',
                 padding: '16px',
                 color: 'var(--text-primary)',
@@ -672,7 +737,9 @@ export default function ChatInterface({
                 resize: 'none',
                 minHeight: '52px',
                 maxHeight: '120px',
-                outline: 'none'
+                outline: 'none',
+                scrollbarWidth: 'none',
+                msOverflowStyle: 'none'
               }}
             />
             <button
@@ -722,6 +789,10 @@ export default function ChatInterface({
       </div>
       
       <style jsx>{`
+        textarea::-webkit-scrollbar {
+          display: none;
+        }
+        
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }
