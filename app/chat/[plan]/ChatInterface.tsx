@@ -1,4 +1,4 @@
-// app/chat/[plan]/ChatInterface.tsx - Claude 스타일 채팅 인터페이스
+// app/chat/[plan]/ChatInterface.tsx - 날짜 오류 수정 버전
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -230,7 +230,7 @@ export default function ChatInterface({
             id: data.threadId,
             title: input.length > 30 ? input.substring(0, 30) + '...' : input,
             lastMessage: data.response.length > 50 ? data.response.substring(0, 50) + '...' : data.response,
-            updatedAt: new Date(),
+            updatedAt: new Date(), // 현재 시간으로 Date 객체 생성
             messageCount: messages.length + 2
           };
 
@@ -484,7 +484,7 @@ export default function ChatInterface({
                       color: 'inherit',
                       opacity: 0.6
                     }}>
-                      {thread.updatedAt.toLocaleDateString()} • {thread.messageCount}개
+                      {new Date(thread.updatedAt).toLocaleDateString()} • {thread.messageCount}개
                     </div>
                   </button>
                 ))
