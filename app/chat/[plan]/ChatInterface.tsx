@@ -1,4 +1,4 @@
-// app/chat/[plan]/ChatInterface.tsx - 쓰레드 목록 포함
+// app/chat/[plan]/ChatInterface.tsx - InnerOS 디자인 적용
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -46,7 +46,6 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 자동 스크롤
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -74,7 +73,6 @@ export default function ChatInterface({
     }
   };
 
-  // 초기 쓰레드 목록 로드
   useEffect(() => {
     loadThreads();
   }, [planId]);
@@ -85,14 +83,14 @@ export default function ChatInterface({
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `안녕하세요! ${planTitle} 이전 대화를 이어서 진행하겠습니다. 대화를 시작해 볼까요?`,
+        content: `안녕하세요! ${planTitle} 이전 대화를 이어서 진행하겠습니다. 무엇을 도와드릴까요?`,
         timestamp: new Date()
       }]);
     } else {
       setMessages([{
         id: 'welcome',
         role: 'assistant',
-        content: `안녕하세요! ${planTitle}에 오신 것을 환영합니다. 대화를 시작해 볼까요?`,
+        content: `안녕하세요! ${planTitle}에 오신 것을 환영합니다. 저는 당신의 Inner-OS AI 어시스턴트입니다. 무엇을 도와드릴까요?`,
         timestamp: new Date()
       }]);
     }
@@ -108,13 +106,11 @@ export default function ChatInterface({
       timestamp: new Date()
     }]);
 
-    // 여기에 쓰레드 메시지 히스토리 로드 로직 추가 가능
-    // 현재는 간단한 환영 메시지로 대체
     setTimeout(() => {
       setMessages([{
         id: 'welcome-existing',
         role: 'assistant',
-        content: `이전 대화를 이어서 진행하겠습니다. 시작해 볼까요?`,
+        content: `이전 대화를 이어서 진행하겠습니다. 무엇을 도와드릴까요?`,
         timestamp: new Date()
       }]);
     }, 500);
@@ -126,7 +122,7 @@ export default function ChatInterface({
     setMessages([{
       id: 'welcome-new',
       role: 'assistant',
-      content: `안녕하세요! ${planTitle} 새로운 대화를 시작하겠습니다. 시작해 볼까요?`,
+      content: `안녕하세요! ${planTitle} 새로운 대화를 시작하겠습니다. 무엇을 도와드릴까요?`,
       timestamp: new Date()
     }]);
     setInput('');
@@ -149,6 +145,11 @@ export default function ChatInterface({
     setLoading(true);
     setError('');
 
+    // 텍스트에리어 높이 리셋
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '52px';
+    }
+
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -170,14 +171,11 @@ export default function ChatInterface({
 
       const data = await response.json();
 
-      // Thread ID 업데이트 (새로 생성된 경우)
       if (data.threadId && !currentThreadId) {
         setCurrentThreadId(data.threadId);
-        // 쓰레드 목록 새로고침
         loadThreads();
       }
 
-      // Assistant 응답 추가
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -187,7 +185,6 @@ export default function ChatInterface({
 
       setMessages(prev => [...prev, assistantMessage]);
 
-      // 쓰레드 목록 업데이트 (마지막 메시지 정보)
       if (data.threadId) {
         setThreads(prev => {
           const existingIndex = prev.findIndex(t => t.id === data.threadId);
@@ -196,13 +193,12 @@ export default function ChatInterface({
             title: input.length > 30 ? input.substring(0, 30) + '...' : input,
             lastMessage: data.response.length > 50 ? data.response.substring(0, 50) + '...' : data.response,
             updatedAt: new Date(),
-            messageCount: messages.length + 2 // user + assistant
+            messageCount: messages.length + 2
           };
 
           if (existingIndex >= 0) {
             const updated = [...prev];
             updated[existingIndex] = threadInfo;
-            // 최근 업데이트된 것이 맨 위로
             return [threadInfo, ...updated.filter((_, i) => i !== existingIndex)];
           } else {
             return [threadInfo, ...prev];
@@ -226,7 +222,6 @@ export default function ChatInterface({
     }
   };
 
-  // Enter 키 처리
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -234,181 +229,351 @@ export default function ChatInterface({
     }
   };
 
-  // Textarea 자동 높이 조정
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     
     const textarea = e.target;
     textarea.style.height = 'auto';
-    textarea.style.height = Math.min(textarea.scrollHeight, 150) + 'px';
+    textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
   };
 
   return (
-    <div className="flex h-full bg-white">
+    <div className="inneros-chat-container">
       {/* 사이드바 - 쓰레드 목록 */}
-      <div className={`${sidebarOpen ? 'w-80' : 'w-0'} transition-all duration-300 overflow-hidden bg-gray-50 border-r flex flex-col`}>
+      <div className={`inneros-chat-sidebar ${!sidebarOpen ? 'collapsed' : ''}`}>
         {/* 사이드바 헤더 */}
-        <div className="p-4 border-b bg-white">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-gray-800">대화 목록</h2>
+        <div style={{ 
+          padding: '20px',
+          borderBottom: '1px solid var(--border-primary)',
+          background: 'var(--bg-secondary)'
+        }}>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between',
+            marginBottom: '16px'
+          }}>
+            <h2 style={{ 
+              fontSize: '16px', 
+              fontWeight: '600', 
+              color: 'var(--text-primary)',
+              margin: '0'
+            }}>
+              대화 목록
+            </h2>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="p-1 hover:bg-gray-100 rounded"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                transition: 'var(--transition-base)'
+              }}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M18 6L6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
+          
           <button
             onClick={startNewChat}
-            className="w-full mt-3 bg-blue-600 text-white rounded-lg px-3 py-2 text-sm hover:bg-blue-700 transition-colors"
+            className="inneros-button"
+            style={{
+              width: '100%',
+              fontSize: '14px',
+              minHeight: '40px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
           >
-            + 새 대화
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+            새 대화
           </button>
         </div>
 
         {/* 쓰레드 목록 */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="inneros-thread-list">
           {loadingThreads ? (
-            <div className="p-4 text-sm text-gray-500">대화 목록을 불러오는 중...</div>
-          ) : threads.length === 0 ? (
-            <div className="p-4 text-sm text-gray-500">아직 대화가 없습니다.</div>
-          ) : (
-            <div className="p-2 space-y-2">
-              {threads.map((thread) => (
-                <div
-                  key={thread.id}
-                  onClick={() => selectThread(thread.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-colors ${
-                    currentThreadId === thread.id
-                      ? 'bg-blue-100 border border-blue-200'
-                      : 'hover:bg-white border border-transparent'
-                  }`}
-                >
-                  <div className="font-medium text-sm truncate">{thread.title}</div>
-                  <div className="text-xs text-gray-500 truncate mt-1">{thread.lastMessage}</div>
-                  <div className="text-xs text-gray-400 mt-1">
-                    {thread.updatedAt.toLocaleDateString()} • {thread.messageCount}개 메시지
-                  </div>
-                </div>
-              ))}
+            <div style={{ 
+              textAlign: 'center', 
+              color: 'var(--text-secondary)', 
+              fontSize: '14px',
+              padding: '20px 0'
+            }}>
+              대화 목록을 불러오는 중...
             </div>
+          ) : threads.length === 0 ? (
+            <div style={{ 
+              textAlign: 'center', 
+              color: 'var(--text-secondary)', 
+              fontSize: '14px',
+              padding: '20px 0'
+            }}>
+              아직 대화가 없습니다
+            </div>
+          ) : (
+            threads.map((thread) => (
+              <button
+                key={thread.id}
+                onClick={() => selectThread(thread.id)}
+                className={`inneros-thread-item ${currentThreadId === thread.id ? 'active' : ''}`}
+              >
+                <div style={{ 
+                  fontSize: '14px', 
+                  fontWeight: '500', 
+                  marginBottom: '4px',
+                  textAlign: 'left'
+                }}>
+                  {thread.title}
+                </div>
+                <div style={{ 
+                  fontSize: '12px', 
+                  opacity: 0.7,
+                  textAlign: 'left',
+                  marginBottom: '4px'
+                }}>
+                  {thread.lastMessage}
+                </div>
+                <div style={{ 
+                  fontSize: '11px', 
+                  opacity: 0.6,
+                  textAlign: 'left'
+                }}>
+                  {thread.updatedAt.toLocaleDateString()} • {thread.messageCount}개
+                </div>
+              </button>
+            ))
           )}
         </div>
       </div>
 
       {/* 메인 채팅 영역 */}
-      <div className="flex-1 flex flex-col">
+      <div className="inneros-chat-main">
         {/* 헤더 */}
-        <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            {!sidebarOpen && (
-              <button
-                onClick={() => setSidebarOpen(true)}
-                className="p-2 hover:bg-gray-100 rounded"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                </svg>
-              </button>
-            )}
-            <div>
-              <h1 className="text-lg font-semibold">{planTitle}</h1>
-              <p className="text-sm text-gray-500">{userEmail}</p>
-            </div>
+        <div className="inneros-chat-header">
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                padding: '8px',
+                borderRadius: '8px',
+                transition: 'var(--transition-base)'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'var(--bg-tertiary)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'none';
+              }}
+            >
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M3 12h18M3 6h18M3 18h18"/>
+              </svg>
+            </button>
+          )}
+          
+          <div>
+            <h1 style={{ 
+              fontSize: '18px', 
+              fontWeight: '600', 
+              color: 'var(--text-primary)',
+              margin: '0'
+            }}>
+              {planTitle}
+            </h1>
+            <p style={{ 
+              fontSize: '12px', 
+              color: 'var(--text-secondary)',
+              margin: '2px 0 0 0'
+            }}>
+              {userEmail}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          
+          <div style={{ display: 'flex', gap: '8px' }}>
             <a
               href="/dashboard"
-              className="rounded-md border hover:bg-gray-50 px-3 py-1.5 text-sm transition-colors"
+              className="inneros-button-secondary"
+              style={{
+                textDecoration: 'none',
+                fontSize: '14px',
+                minHeight: '36px',
+                padding: '8px 16px'
+              }}
             >
               대시보드
             </a>
           </div>
-        </header>
+        </div>
 
         {/* 메시지 영역 */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          <div className="max-w-3xl mx-auto space-y-4">
-            {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-              >
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                    message.role === 'user'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 border'
-                  }`}
-                >
-                  <div className="whitespace-pre-wrap break-words">
-                    {message.content}
-                  </div>
-                  <div className={`text-xs mt-1 ${
-                    message.role === 'user' ? 'text-blue-100' : 'text-gray-500'
-                  }`}>
-                    {message.timestamp.toLocaleTimeString()}
-                  </div>
-                </div>
+        <div className="inneros-chat-messages">
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`inneros-message ${message.role}`}
+            >
+              <div style={{ marginBottom: '8px' }}>
+                {message.content}
               </div>
-            ))}
-            
-            {loading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-100 border rounded-lg px-4 py-2">
-                  <div className="flex items-center space-x-1">
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                    <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-                  </div>
-                </div>
+              <div style={{ 
+                fontSize: '11px', 
+                opacity: 0.6
+              }}>
+                {message.timestamp.toLocaleTimeString()}
               </div>
-            )}
-            
-            <div ref={messagesEndRef} />
-          </div>
+            </div>
+          ))}
+          
+          {loading && (
+            <div className="inneros-message assistant">
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px' 
+              }}>
+                <div className="loading-dots">
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                </div>
+                AI가 답변을 생성하고 있습니다...
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
         </div>
 
         {/* 입력 영역 */}
-        <div className="bg-white border-t px-6 py-4">
-          <div className="max-w-3xl mx-auto">
-            {error && (
-              <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
-                {error}
-              </div>
-            )}
-            
-            <div className="flex items-end gap-3">
-              <div className="flex-1 relative">
-                <textarea
-                  ref={textareaRef}
-                  value={input}
-                  onChange={handleInputChange}
-                  onKeyDown={handleKeyPress}
-                  placeholder="메시지를 입력하세요... (Shift+Enter로 줄바꿈)"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  style={{ minHeight: '42px', maxHeight: '150px' }}
-                  disabled={loading}
-                />
-              </div>
-              <button
-                onClick={sendMessage}
-                disabled={!input.trim() || loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                style={{ height: '42px' }}
-              >
-                {loading ? '전송중...' : '전송'}
-              </button>
+        <div className="inneros-chat-input">
+          {error && (
+            <div style={{ 
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: '8px',
+              padding: '12px 16px',
+              marginBottom: '16px',
+              color: '#ef4444',
+              fontSize: '14px'
+            }}>
+              {error}
             </div>
-            
-            <div className="text-xs text-gray-500 mt-2">
-              Thread ID: {currentThreadId || '새 대화'}
-            </div>
+          )}
+          
+          <div className="inneros-chat-input-form">
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyPress}
+              placeholder="메시지를 입력하세요... (Shift+Enter로 줄바꿈)"
+              className="inneros-chat-textarea"
+              disabled={loading}
+            />
+            <button
+              onClick={sendMessage}
+              disabled={!input.trim() || loading}
+              className="inneros-chat-send-button"
+            >
+              {loading ? (
+                <div className="loading-spinner" style={{
+                  width: '16px',
+                  height: '16px',
+                  border: '2px solid rgba(255,255,255,0.3)',
+                  borderTop: '2px solid white',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }}></div>
+              ) : (
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              )}
+            </button>
+          </div>
+          
+          <div style={{ 
+            fontSize: '11px', 
+            color: 'var(--text-muted)',
+            textAlign: 'center',
+            marginTop: '12px'
+          }}>
+            Thread ID: {currentThreadId || '새 대화'} • {planTitle}
           </div>
         </div>
       </div>
+      
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        
+        .loading-dots {
+          display: flex;
+          gap: 4px;
+        }
+        
+        .loading-dots div {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--text-secondary);
+          animation: dot-pulse 1.5s infinite ease-in-out;
+        }
+        
+        .loading-dots div:nth-child(1) {
+          animation-delay: -0.32s;
+        }
+        
+        .loading-dots div:nth-child(2) {
+          animation-delay: -0.16s;
+        }
+        
+        @keyframes dot-pulse {
+          0%, 80%, 100% {
+            opacity: 0.3;
+            transform: scale(0.8);
+          }
+          40% {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+          .inneros-chat-sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            height: 100vh;
+            z-index: 100;
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+          }
+          
+          .inneros-chat-sidebar:not(.collapsed) {
+            transform: translateX(0);
+          }
+          
+          .inneros-chat-sidebar.collapsed {
+            width: 280px;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -9,10 +9,8 @@ export default function AuthStatusButton() {
   const [debugInfo, setDebugInfo] = useState<string>('');
 
   useEffect(() => {
-    // uid 쿠키 확인하는 함수 (더 안전한 방식)
     const checkAuthStatus = async () => {
       try {
-        // 1. 쿠키에서 uid 확인
         const cookies = document.cookie.split(';').map(c => c.trim());
         const uidCookie = cookies.find(cookie => cookie.startsWith('uid='));
         const uidValue = uidCookie ? uidCookie.split('=')[1] : null;
@@ -22,7 +20,6 @@ export default function AuthStatusButton() {
         console.log('UID cookie:', uidCookie);
         console.log('UID value:', uidValue);
         
-        // 2. API로도 확인 (더 확실한 방법)
         try {
           const response = await fetch('/api/me/summary', { 
             credentials: 'include',
@@ -45,7 +42,6 @@ export default function AuthStatusButton() {
           console.log('API check failed:', apiError);
         }
         
-        // 3. 쿠키 기반 판단 (API 실패 시 백업)
         const hasValidUid = Boolean(uidValue && uidValue !== '' && uidValue !== 'undefined');
         setLoggedIn(hasValidUid);
         setDebugInfo(`Cookie: ${hasValidUid ? 'Yes' : 'No'} | Total: ${cookies.length}`);
@@ -59,18 +55,14 @@ export default function AuthStatusButton() {
       }
     };
 
-    // 초기 확인
     checkAuthStatus();
 
-    // 주기적 확인 (2초마다)
     const interval = setInterval(checkAuthStatus, 2000);
 
-    // 페이지 포커스 시 확인
     const handleFocus = () => {
-      setTimeout(checkAuthStatus, 100); // 약간의 지연
+      setTimeout(checkAuthStatus, 100);
     };
     
-    // storage 이벤트 (다른 탭에서의 변화 감지)
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'auth_changed') {
         setTimeout(checkAuthStatus, 100);
@@ -87,21 +79,9 @@ export default function AuthStatusButton() {
     };
   }, []);
 
-  // 로그인 상태 변화를 다른 탭에 알리는 함수
-  const triggerAuthChange = () => {
-    try {
-      localStorage.setItem('auth_changed', Date.now().toString());
-      localStorage.removeItem('auth_changed');
-    } catch (e) {
-      // localStorage 사용 불가 시 무시
-    }
-  };
-
-  // 로그인/로그아웃 후 상태 즉시 업데이트를 위한 함수
   useEffect(() => {
     const handleCustomAuthChange = () => {
       setTimeout(() => {
-        // 상태 재확인
         const cookies = document.cookie.split(';').map(c => c.trim());
         const uidCookie = cookies.find(cookie => cookie.startsWith('uid='));
         const uidValue = uidCookie ? uidCookie.split('=')[1] : null;
@@ -112,7 +92,6 @@ export default function AuthStatusButton() {
       }, 100);
     };
 
-    // 커스텀 이벤트 리스너
     window.addEventListener('auth-status-changed', handleCustomAuthChange);
     
     return () => {
@@ -120,26 +99,55 @@ export default function AuthStatusButton() {
     };
   }, []);
 
+  if (loggedIn === null) {
+    return (
+      <div style={{
+        background: 'var(--bg-tertiary)',
+        border: '1px solid var(--border-primary)',
+        borderRadius: '8px',
+        padding: '8px 16px',
+        color: 'var(--text-secondary)',
+        fontSize: '14px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}>
+        <div className="loading-spinner" style={{
+          width: '12px',
+          height: '12px',
+          border: '2px solid var(--border-primary)',
+          borderTop: '2px solid var(--text-secondary)',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }}></div>
+        확인중...
+      </div>
+    );
+  }
+
+  if (loggedIn) {
+    return <LogoutButton />;
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      {loggedIn === null ? (
-        <div className="rounded border px-3 py-1 text-sm bg-gray-100 text-gray-400">
-          확인중...
-        </div>
-      ) : loggedIn ? (
-        <LogoutButton />
-      ) : (
-        <a href="/auth/sign-in" className="rounded border px-3 py-1 text-sm hover:bg-gray-50">
-          로그인
-        </a>
-      )}
-      
-      {/* 디버깅 정보 (개발용) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div className="text-xs text-gray-400" title={`Debug: ${debugInfo}`}>
-          {debugInfo}
-        </div>
-      )}
-    </div>
+    <a 
+      href="/auth/sign-in" 
+      className="inneros-button-secondary"
+      style={{
+        textDecoration: 'none',
+        fontSize: '14px',
+        minHeight: '36px',
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+      }}
+    >
+      <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+        <path d="M10 17l5-5-5-5v3H3v4h7v3z"/>
+        <path d="M21 3H11v2h10v14H11v2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+      </svg>
+      로그인
+    </a>
   );
 }

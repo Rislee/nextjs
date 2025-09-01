@@ -1,10 +1,10 @@
+// app/auth/sign-up/page.tsx
 'use client';
 
 import { useCallback, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createBrowserClient } from '@supabase/ssr';
 
-// createClient 대신 createBrowserClient 사용
 const supabase = createBrowserClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -12,7 +12,11 @@ const supabase = createBrowserClient(
 
 export default function SignUpPage() {
   return (
-    <Suspense fallback={<div className="p-6 text-sm text-gray-600">회원가입 초기화 중...</div>}>
+    <Suspense fallback={
+      <div className="inneros-page" style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ color: 'var(--text-secondary)' }}>회원가입 초기화 중...</div>
+      </div>
+    }>
       <Content />
     </Suspense>
   );
@@ -46,15 +50,12 @@ function Content() {
 
       if (error) throw error;
 
-      // 회원가입 성공 처리
       const session = data.session;
       const user = data.user;
       
       if (session && session.access_token) {
-        // 세션이 있으면 (이메일 인증 꺼짐) - 바로 로그인 처리
         console.log("Session created, syncing...");
         
-        // uid 쿠키 동기화
         const ensureRes = await fetch('/api/session/ensure', { 
           method: 'GET', 
           credentials: 'include',
@@ -62,10 +63,8 @@ function Content() {
         });
         
         if (ensureRes.ok) {
-          // 성공 - 대시보드로 이동
           window.location.href = next || '/dashboard';
         } else {
-          // 동기화 실패 - 로그인 페이지로
           console.error("Session sync failed");
           setNotice("회원가입은 완료되었습니다. 로그인해주세요.");
           setTimeout(() => {
@@ -73,67 +72,144 @@ function Content() {
           }, 2000);
         }
       } else if (user) {
-        // 사용자는 생성되었지만 세션이 없음 (이메일 인증 필요)
         setNotice("회원가입이 완료되었습니다. 이메일의 인증 링크를 확인해 주세요.");
       } else {
-        // 예상치 못한 상황
         throw new Error("회원가입 처리 중 오류가 발생했습니다.");
       }
     } catch (err: any) {
-      alert(err?.message || '회원가입 중 오류가 발생했습니다.');
+      setNotice(err?.message || '회원가입 중 오류가 발생했습니다.');
     } finally {
       setLoading(false);
     }
   }, [email, pw, fullName, next, loading]);
 
   return (
-    <main className="mx-auto max-w-sm p-6">
-      <h1 className="text-xl font-semibold">회원가입</h1>
+    <div className="inneros-page" style={{ 
+      minHeight: '100vh', 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'center',
+      padding: '24px'
+    }}>
+      <div className="inneros-card" style={{ 
+        width: '100%', 
+        maxWidth: '400px',
+        background: 'var(--bg-secondary)',
+        border: '1px solid var(--border-primary)'
+      }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ 
+            fontSize: '28px', 
+            fontWeight: '600', 
+            color: 'var(--text-primary)', 
+            margin: '0 0 8px 0' 
+          }}>
+            회원가입
+          </h1>
+          <p style={{ 
+            color: 'var(--text-secondary)', 
+            fontSize: '16px', 
+            margin: '0' 
+          }}>
+            새로운 운영체제를 시작해보세요
+          </p>
+        </div>
 
-      <form onSubmit={onSubmit} className="mt-4 space-y-3">
-        <input
-          type="text"
-          placeholder="이름 (선택)"
-          value={fullName}
-          onChange={(e) => setFullName(e.target.value)}
-          className="w-full rounded border px-3 py-2 text-sm"
-        />
-        <input
-          type="email"
-          placeholder="이메일"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full rounded border px-3 py-2 text-sm"
-        />
-        <input
-          type="password"
-          placeholder="비밀번호"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          required
-          className="w-full rounded border px-3 py-2 text-sm"
-        />
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md border px-4 py-2 text-sm hover:bg-gray-50 disabled:opacity-50"
-        >
-          {loading ? '가입 중...' : '회원가입'}
-        </button>
-      </form>
+        <form onSubmit={onSubmit} className="inneros-form">
+          <div className="inneros-form-group">
+            <label className="inneros-label">이름 (선택사항)</label>
+            <input
+              type="text"
+              placeholder="홍길동"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              className="inneros-input"
+            />
+          </div>
 
-      {notice && <p className="mt-3 text-sm text-amber-700">{notice}</p>}
+          <div className="inneros-form-group">
+            <label className="inneros-label">이메일</label>
+            <input
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="inneros-input"
+            />
+          </div>
+          
+          <div className="inneros-form-group">
+            <label className="inneros-label">비밀번호</label>
+            <input
+              type="password"
+              placeholder="안전한 비밀번호를 입력하세요"
+              value={pw}
+              onChange={(e) => setPw(e.target.value)}
+              required
+              className="inneros-input"
+            />
+            <div style={{ 
+              fontSize: '12px', 
+              color: 'var(--text-muted)', 
+              marginTop: '4px' 
+            }}>
+              최소 8자 이상의 비밀번호를 사용하세요
+            </div>
+          </div>
 
-      <div className="mt-4 text-xs text-gray-500">
-        이미 계정이 있으신가요?{" "}
-        <a
-          href={next ? `/auth/sign-in?next=${encodeURIComponent(next)}` : '/auth/sign-in'}
-          className="underline"
-        >
-          로그인
-        </a>
+          <button
+            type="submit"
+            disabled={loading}
+            className="inneros-button"
+            style={{ width: '100%' }}
+          >
+            {loading ? '가입 처리 중...' : '계정 만들기'}
+          </button>
+        </form>
+
+        {notice && (
+          <div className={notice.includes('완료') || notice.includes('확인') ? 'inneros-success' : 'inneros-error'}>
+            {notice}
+          </div>
+        )}
+
+        {/* 약관 동의 */}
+        <div style={{ 
+          textAlign: 'center', 
+          fontSize: '12px', 
+          color: 'var(--text-muted)', 
+          marginTop: '24px',
+          lineHeight: '1.5'
+        }}>
+          가입하시면 InnerOS의{' '}
+          <a href="https://www.inneros.co.kr/terms" style={{ color: 'var(--accent-color)', textDecoration: 'none' }}>
+            서비스 약관
+          </a>과{' '}
+          <a href="https://www.inneros.co.kr/privacy" style={{ color: 'var(--accent-color)', textDecoration: 'none' }}>
+            개인정보 처리방침
+          </a>에 동의하는 것으로 간주됩니다.
+        </div>
+
+        {/* 로그인 링크 */}
+        <div style={{ textAlign: 'center', marginTop: '24px' }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+            이미 계정이 있으신가요?{' '}
+          </span>
+          <a
+            href={next ? `/auth/sign-in?next=${encodeURIComponent(next)}` : '/auth/sign-in'}
+            style={{ 
+              color: 'var(--accent-color)', 
+              textDecoration: 'none',
+              fontSize: '14px',
+              fontWeight: '500'
+            }}
+          >
+            로그인
+          </a>
+        </div>
       </div>
-    </main>
+    </div>
   );
 }

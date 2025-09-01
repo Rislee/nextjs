@@ -1,26 +1,381 @@
 @import "tailwindcss";
 
+/* InnerOS Design System Variables */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Colors */
+  --bg-primary: #0d0d0d;
+  --bg-secondary: #171717;
+  --bg-tertiary: rgba(255, 255, 255, 0.08);
+  --bg-input: rgba(255, 255, 255, 0.1);
+  --bg-accent: rgb(236, 246, 231);
+  --text-primary: #ffffff;
+  --text-secondary: #858588;
+  --text-muted: #666666;
+  --border-primary: rgba(255, 255, 255, 0.1);
+  --accent-color: rgb(99, 102, 241);
+  
+  /* Typography */
+  --font-family: 'Inter', 'Inter Placeholder', sans-serif;
+  
+  /* Spacing */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 80px;
+  
+  /* Transitions */
+  --transition-base: all 0.2s ease-in-out;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-family);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+/* Base Components */
+.inneros-button {
+  background: var(--bg-accent);
+  color: var(--text-secondary);
+  border: none;
+  border-radius: var(--radius-lg);
+  padding: 12px 24px;
+  font-family: var(--font-family);
+  font-size: 16px;
+  font-weight: 400;
+  cursor: pointer;
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.inneros-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(236, 246, 231, 0.3);
+}
+
+.inneros-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.inneros-button-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+}
+
+.inneros-button-secondary:hover {
+  background: rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+}
+
+.inneros-input {
+  background: var(--bg-input);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  font-family: var(--font-family);
+  font-size: 16px;
+  color: var(--text-primary);
+  width: 100%;
+  transition: var(--transition-base);
+}
+
+.inneros-input::placeholder {
+  color: var(--text-muted);
+}
+
+.inneros-input:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.inneros-label {
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.inneros-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  transition: var(--transition-base);
+}
+
+.inneros-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Layout */
+.inneros-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.inneros-page {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.inneros-header {
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 16px 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.inneros-header-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.inneros-logo {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: var(--transition-base);
+}
+
+.inneros-logo:hover {
+  opacity: 0.8;
+}
+
+/* Form Styles */
+.inneros-form {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  max-width: 400px;
+  margin: 0 auto;
+}
+
+.inneros-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inneros-error {
+  color: #ef4444;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+.inneros-success {
+  color: #22c55e;
+  font-size: 14px;
+  margin-top: 8px;
+}
+
+/* Chat Styles */
+.inneros-chat-container {
+  height: 100vh;
+  display: flex;
+  background: var(--bg-primary);
+}
+
+.inneros-chat-sidebar {
+  width: 280px;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-primary);
+  display: flex;
+  flex-direction: column;
+  transition: var(--transition-base);
+}
+
+.inneros-chat-sidebar.collapsed {
+  width: 0;
+  overflow: hidden;
+}
+
+.inneros-chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.inneros-chat-header {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-primary);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inneros-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inneros-message {
+  max-width: 70%;
+  padding: 16px;
+  border-radius: 16px;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.inneros-message.user {
+  background: var(--accent-color);
+  color: white;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
+.inneros-message.assistant {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-primary);
+  color: var(--text-primary);
+  align-self: flex-start;
+}
+
+.inneros-chat-input {
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-primary);
+  padding: 24px;
+}
+
+.inneros-chat-input-form {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+
+.inneros-chat-textarea {
+  flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-primary);
+  border-radius: 12px;
+  padding: 16px;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: 16px;
+  resize: none;
+  min-height: 52px;
+  max-height: 120px;
+  transition: var(--transition-base);
+}
+
+.inneros-chat-textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.inneros-chat-send-button {
+  background: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: var(--transition-base);
+  min-width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.inneros-chat-send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.inneros-chat-send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Thread List */
+.inneros-thread-list {
+  padding: 16px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.inneros-thread-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  cursor: pointer;
+  transition: var(--transition-base);
+  margin-bottom: 8px;
+  width: 100%;
+  text-align: left;
+}
+
+.inneros-thread-item:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-primary);
+}
+
+.inneros-thread-item.active {
+  background: var(--accent-color);
+  color: white;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .inneros-container {
+    padding: 0 16px;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  
+  .inneros-chat-sidebar {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    z-index: 50;
+    transform: translateX(-100%);
+  }
+  
+  .inneros-chat-sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .inneros-message {
+    max-width: 85%;
+  }
+  
+  .inneros-form {
+    padding: 0 16px;
+  }
 }

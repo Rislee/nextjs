@@ -18,7 +18,6 @@ export default function LogoutButton({ className }: { className?: string }) {
   );
 
   const triggerAuthChange = () => {
-    // AuthStatusButton에게 상태 변화 알리기
     try {
       window.dispatchEvent(new CustomEvent('auth-status-changed'));
       localStorage.setItem('auth_changed', Date.now().toString());
@@ -35,7 +34,6 @@ export default function LogoutButton({ className }: { className?: string }) {
     try {
       console.log('=== Starting logout process ===');
       
-      // 1) Supabase 세션 로그아웃 (타임아웃 처리)
       try {
         await Promise.race([
           supabase.auth.signOut(),
@@ -48,7 +46,6 @@ export default function LogoutButton({ className }: { className?: string }) {
         console.log('Supabase signOut timeout/error, continuing...', e);
       }
 
-      // 2) 서버 uid 쿠키 제거
       try {
         const logoutRes = await fetch('/api/auth/logout', { 
           method: 'POST', 
@@ -59,22 +56,18 @@ export default function LogoutButton({ className }: { className?: string }) {
         console.log('Logout API error, continuing...', e);
       }
 
-      // 3) 클라이언트에서도 쿠키 확인 및 정리
       const cookies = document.cookie.split(';');
       console.log('Current cookies before logout:', cookies.length);
       
-      // 상태 변화 알리기
       triggerAuthChange();
       
-      // 4) 약간의 지연 후 강제 이동
       setTimeout(() => {
         console.log('Redirecting to sign-in...');
         window.location.href = '/auth/sign-in';
-      }, 500); // 0.5초 지연으로 상태 업데이트 시간 확보
+      }, 500);
       
     } catch (error) {
       console.error('Logout error:', error);
-      // 에러가 발생해도 로그인 페이지로 이동
       triggerAuthChange();
       setTimeout(() => {
         window.location.href = '/auth/sign-in';
@@ -87,9 +80,46 @@ export default function LogoutButton({ className }: { className?: string }) {
       type="button"
       onClick={onLogout}
       disabled={loading}
-      className={className ?? "rounded border px-3 py-1 text-sm hover:bg-gray-50 disabled:opacity-50"}
+      className={className ?? "inneros-button-secondary"}
+      style={{
+        fontSize: '14px',
+        minHeight: '36px',
+        padding: '8px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        opacity: loading ? 0.7 : 1,
+        cursor: loading ? 'not-allowed' : 'pointer'
+      }}
     >
-      {loading ? '로그아웃 중...' : '로그아웃'}
+      {loading ? (
+        <>
+          <div className="loading-spinner" style={{
+            width: '12px',
+            height: '12px',
+            border: '2px solid rgba(255,255,255,0.3)',
+            borderTop: '2px solid currentColor',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite'
+          }}></div>
+          로그아웃 중...
+        </>
+      ) : (
+        <>
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.59L17 17l5-5z"/>
+            <path d="M4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+          </svg>
+          로그아웃
+        </>
+      )}
+      
+      <style jsx>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </button>
   );
 }
