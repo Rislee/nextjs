@@ -271,13 +271,18 @@ export default function ChatInterface({
                 display: 'flex', 
                 alignItems: 'center', 
                 justifyContent: 'space-between',
+                height: '28px', // 고정 높이로 버튼 위치 맞춤
                 marginBottom: '16px'
               }}>
                 <h2 style={{ 
                   fontSize: '16px', 
                   fontWeight: '600', 
                   color: 'var(--text-primary)',
-                  margin: '0'
+                  margin: '0',
+                  whiteSpace: 'nowrap', // 줄바꿈 방지
+                  overflow: 'hidden', // 넘치는 텍스트 숨기기
+                  opacity: 1,
+                  transition: 'opacity 0.2s ease'
                 }}>
                   대화 목록
                 </h2>
@@ -289,7 +294,11 @@ export default function ChatInterface({
                     color: 'var(--text-secondary)',
                     cursor: 'pointer',
                     padding: '4px',
-                    borderRadius: '4px'
+                    borderRadius: '4px',
+                    height: '28px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
                   <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
@@ -298,25 +307,30 @@ export default function ChatInterface({
                 </button>
               </div>
               
+            <div style={{ position: 'relative', marginBottom: '16px', height: '44px' }}>
               <button
                 onClick={startNewChat}
                 style={{
                   background: 'var(--brand-color)',
                   color: 'var(--black-100)',
                   border: 'none',
-                  borderRadius: '80px',
-                  padding: '12px 24px',
+                  borderRadius: sidebarOpen ? '80px' : '50%', // 조건부 radius
+                  padding: sidebarOpen ? '12px 24px' : '12px', // 조건부 padding
                   fontFamily: 'var(--font-family)',
                   fontSize: '14px',
                   fontWeight: '600',
                   cursor: 'pointer',
-                  width: '100%',
-                  minHeight: '40px',
+                  width: sidebarOpen ? '100%' : '44px', // 조건부 width
+                  height: '44px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s ease-in-out'
+                  justifyContent: sidebarOpen ? 'center' : 'center',
+                  gap: sidebarOpen ? '8px' : '0',
+                  transition: 'width 0.25s ease, border-radius 0.25s ease, padding 0.25s ease',
+                  position: 'absolute',
+                  left: '0', // 왼쪽 끝 고정
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden'
                 }}
                 onMouseOver={(e) => {
                   e.currentTarget.style.background = 'var(--white)';
@@ -325,11 +339,12 @@ export default function ChatInterface({
                   e.currentTarget.style.background = 'var(--brand-color)';
                 }}
               >
-                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 5v14M5 12h14"/>
+                <svg width="16" height="16" fill="var(--black-100)" viewBox="0 0 24 24" stroke="var(--black-100)" strokeWidth="2">
+                  <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
                 </svg>
-                새 대화
+                {sidebarOpen && <span>새 대화</span>}
               </button>
+            </div>
             </div>
 
             {/* 쓰레드 목록 */}
@@ -343,7 +358,9 @@ export default function ChatInterface({
                   textAlign: 'center', 
                   color: 'var(--text-secondary)', 
                   fontSize: '14px',
-                  padding: '20px 0'
+                  padding: '20px 0',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden'
                 }}>
                   대화 목록을 불러오는 중...
                 </div>
@@ -352,7 +369,9 @@ export default function ChatInterface({
                   textAlign: 'center', 
                   color: 'var(--text-secondary)', 
                   fontSize: '14px',
-                  padding: '20px 0'
+                  padding: '20px 0',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden'
                 }}>
                   아직 대화가 없습니다
                 </div>
@@ -399,52 +418,54 @@ export default function ChatInterface({
             </div>
           </>
         ) : (
-          // 닫힌 상태 - 컴팩트 버튼들
+          // 닫힌 상태 - 컴팩트 버튼들 (정확한 위치 매칭)
           <div style={{
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
-            padding: '20px 8px',
+            padding: '20px 8px', // 열린 상태와 동일한 상단 패딩
             alignItems: 'center'
           }}>
-            {/* 1. 사이드바 열기 버튼 */}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              title="사이드바 열기"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                borderRadius: '8px',
-                width: '44px',
-                height: '44px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" fill="none"/>
-              </svg>
-            </button>
+            <div style={{ height: '28px', marginBottom: '16px' }}> {/* 헤더 높이와 동일 */}
+              {/* 1. 사이드바 열기 버튼 */}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                title="사이드바 열기"
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  borderRadius: '8px',
+                  width: '44px',
+                  height: '28px', // 헤더의 닫기 버튼과 동일한 높이
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" fill="none"/>
+                </svg>
+              </button>
+            </div>
 
-            {/* 2. 새 대화 버튼 (플러스) */}
+            {/* 2. 새 대화 버튼 (열린 상태와 정확히 같은 위치) */}
             <button
               onClick={startNewChat}
               title="새 대화"
               style={{
                 background: 'var(--brand-color)',
-                color: 'var(--black-100)', // 검은색으로 설정
+                color: 'var(--black-100)',
                 border: 'none',
-                borderRadius: '50%',
+                borderRadius: '50%', // 닫힌 상태에서는 완전한 원
                 width: '44px',
-                height: '44px',
+                height: '44px', // 정사각형으로 만들어서 완전한 원 생성
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                transition: 'all 0.2s ease-in-out'
+                transition: 'all 0.15s ease', // 사이드바보다 빠른 트랜지션
+                marginBottom: '16px'
               }}
               onMouseOver={(e) => {
                 e.currentTarget.style.background = 'var(--white)';
@@ -453,29 +474,8 @@ export default function ChatInterface({
                 e.currentTarget.style.background = 'var(--brand-color)';
               }}
             >
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M12 5v14M5 12h14"/>
-              </svg>
-            </button>
-
-            {/* 3. 채팅 목록 버튼 */}
-            <button
-              title="대화 목록"
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                borderRadius: '8px',
-                width: '44px',
-                height: '44px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              <svg width="16" height="16" fill="var(--black-100)" viewBox="0 0 24 24" stroke="var(--black-100)" strokeWidth="2">
+                <path d="M12 5v14M5 12h14" strokeLinecap="round"/>
               </svg>
             </button>
           </div>

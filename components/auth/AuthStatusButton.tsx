@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -125,7 +124,29 @@ export default function AuthStatusButton() {
   }
 
   if (loggedIn) {
-    return <LogoutButton />;
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <a 
+          href="/dashboard" 
+          className="inneros-button-secondary"
+          style={{
+            textDecoration: 'none',
+            fontSize: '14px',
+            minHeight: '36px',
+            padding: '8px 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+          </svg>
+          대시보드
+        </a>
+        <LogoutButton />
+      </div>
+    );
   }
 
   return (
@@ -150,4 +171,3 @@ export default function AuthStatusButton() {
     </a>
   );
 }
-

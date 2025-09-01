@@ -1,7 +1,7 @@
+// app/layout.tsx
 import type { Metadata } from "next";
 import "./globals.css";
 import AuthStatusButton from "@/components/auth/AuthStatusButton";
-import DashboardButton from "@/components/auth/DashboardButton";
 
 export const metadata: Metadata = {
   title: "InnerOS Account",
