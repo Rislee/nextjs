@@ -2,20 +2,29 @@
 
 /* InnerOS Design System Variables */
 :root {
-  /* Colors */
-  --bg-primary: #0d0d0d;
-  --bg-secondary: #171717;
-  --bg-tertiary: rgba(255, 255, 255, 0.08);
-  --bg-input: rgba(255, 255, 255, 0.1);
-  --bg-accent: rgb(236, 246, 231);
-  --text-primary: #ffffff;
-  --text-secondary: #858588;
-  --text-muted: #666666;
+  /* Brand Colors - 정확한 프레이머 팔레트 */
+  --brand-color: rgb(202, 232, 189); /* CAE8BD */
+  --white: rgb(255, 255, 255); /* 100% */
+  --black-100: rgb(13, 13, 13); /* 100% */
+  --black-80: rgb(23, 23, 23); /* 100% */
+  --black-60: rgb(28, 28, 28); /* 100% */
+  --text-color: rgba(255, 255, 255, 0.5); /* 50% */
+  --input-bg: rgba(255, 255, 255, 0.1); /* 10% */
+  
+  /* Legacy mapping for compatibility */
+  --bg-primary: var(--black-100);
+  --bg-secondary: var(--black-80);
+  --bg-tertiary: var(--black-60);
+  --bg-input: var(--input-bg);
+  --bg-accent: var(--brand-color);
+  --text-primary: var(--white);
+  --text-secondary: var(--text-color);
+  --text-muted: var(--text-color);
   --border-primary: rgba(255, 255, 255, 0.1);
-  --accent-color: rgb(99, 102, 241);
+  --accent-color: var(--brand-color);
   
   /* Typography */
-  --font-family: 'Inter', 'Inter Placeholder', sans-serif;
+  --font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
   
   /* Spacing */
   --radius-sm: 8px;
@@ -41,9 +50,39 @@ html, body {
 
 /* Base Components */
 .inneros-button {
-  background: var(--bg-accent);
-  color: var(--text-secondary);
+  background: var(--brand-color);
+  color: var(--black-100);
   border: none;
+  border-radius: var(--radius-lg);
+  padding: 12px 24px;
+  font-family: var(--font-family);
+  font-size: 16px;
+  font-weight: 600; /* Semibold */
+  cursor: pointer;
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.inneros-button:hover {
+  background: var(--white);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(202, 232, 189, 0.3);
+}
+
+.inneros-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.inneros-button-secondary {
+  background: var(--black-80);
+  color: var(--white);
+  border: 2px solid transparent;
   border-radius: var(--radius-lg);
   padding: 12px 24px;
   font-family: var(--font-family);
@@ -58,55 +97,40 @@ html, body {
   min-height: 48px;
 }
 
-.inneros-button:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(236, 246, 231, 0.3);
-}
-
-.inneros-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.inneros-button-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-primary);
-}
-
 .inneros-button-secondary:hover {
-  background: rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.1);
+  background: var(--black-60);
+  border-color: var(--brand-color);
+  transform: translateY(-1px);
 }
 
 .inneros-input {
-  background: var(--bg-input);
-  border: 1px solid transparent;
+  background: var(--input-bg);
+  border: 2px solid transparent;
   border-radius: var(--radius-sm);
   padding: 16px;
   font-family: var(--font-family);
   font-size: 16px;
-  color: var(--text-primary);
+  color: var(--white);
   width: 100%;
   transition: var(--transition-base);
 }
 
 .inneros-input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-color);
 }
 
 .inneros-input:focus {
   outline: none;
-  border-color: var(--accent-color);
-  background: rgba(255, 255, 255, 0.15);
+  border-color: var(--brand-color);
+  background: var(--black-80);
 }
 
 .inneros-label {
-  color: var(--text-secondary);
+  color: var(--white);
   font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 8px;
+  font-weight: 400;
+  font-family: var(--font-family);
+  margin-bottom: 10px;
   display: block;
 }
 
