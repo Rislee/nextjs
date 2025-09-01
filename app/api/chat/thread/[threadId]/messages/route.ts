@@ -1,4 +1,4 @@
-// app/api/chat/threads/[threadId]/messages/route.ts
+// app/api/chat/thread/[threadId]/messages/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -20,10 +20,13 @@ export async function GET(
 ) {
   try {
     const threadId = params.threadId;
+    console.log("=== Thread Messages API called for:", threadId);
 
     // 세션 기반 사용자 인증
     const ck = await cookies();
     const uid = ck.get("uid")?.value;
+
+    console.log("UID from cookie:", uid ? uid.substring(0, 8) + '...' : 'none');
 
     if (!uid) {
       return NextResponse.json(
@@ -46,6 +49,8 @@ export async function GET(
     );
 
     const { data: userData } = await supabase.auth.getUser();
+    console.log("User data:", userData.user?.email || 'none');
+    
     if (!userData.user) {
       return NextResponse.json(
         { error: "invalid_session" },
@@ -60,12 +65,25 @@ export async function GET(
     );
 
     // 해당 쓰레드가 사용자의 것인지 확인
-    const { data: threadOwnership } = await supabaseAdmin
+    const { data: threadOwnership, error: ownershipError } = await supabaseAdmin
       .from("user_threads")
       .select("plan_id")
       .eq("thread_id", threadId)
       .eq("user_id", uid)
-      .single();
+      .maybeSingle();
+
+    console.log("Thread ownership check:", {
+      found: !!threadOwnership,
+      error: ownershipError?.message || 'none'
+    });
+
+    if (ownershipError) {
+      console.error("Ownership query error:", ownershipError);
+      return NextResponse.json(
+        { error: "database_error", detail: ownershipError.message },
+        { status: 500, headers: CORS_HEADERS }
+      );
+    }
 
     if (!threadOwnership) {
       return NextResponse.json(
@@ -75,17 +93,24 @@ export async function GET(
     }
 
     // 해당 쓰레드의 메시지들 조회
-    const { data: messages, error } = await supabaseAdmin
+    console.log("Querying messages for thread:", threadId);
+    
+    const { data: messages, error: messagesError } = await supabaseAdmin
       .from("chat_messages")
       .select("id, role, content, created_at")
       .eq("thread_id", threadId)
       .eq("user_id", uid)
       .order("created_at", { ascending: true });
 
-    if (error) {
-      console.error("Messages query error:", error);
+    console.log("Messages query result:", {
+      error: messagesError?.message || 'none',
+      count: messages?.length || 0
+    });
+
+    if (messagesError) {
+      console.error("Messages query error:", messagesError);
       return NextResponse.json(
-        { error: "database_error" },
+        { error: "database_error", detail: messagesError.message },
         { status: 500, headers: CORS_HEADERS }
       );
     }
@@ -97,6 +122,8 @@ export async function GET(
       content: msg.content,
       timestamp: new Date(msg.created_at),
     }));
+
+    console.log("Formatted messages count:", formattedMessages.length);
 
     return NextResponse.json(
       {
@@ -110,6 +137,7 @@ export async function GET(
   } catch (error: unknown) {
     const err = error as Error;
     console.error("Thread Messages API Error:", err.message);
+    console.error("Stack trace:", err.stack);
     
     return NextResponse.json(
       { 

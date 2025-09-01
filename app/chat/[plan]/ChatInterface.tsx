@@ -58,15 +58,20 @@ export default function ChatInterface({
   const loadThreads = async () => {
     setLoadingThreads(true);
     try {
-      const response = await fetch(`/api/chat/threads?planId=${planId}`, {
+      console.log('Loading threads for plan:', planId);
+      const response = await fetch(`/api/chat/thread?planId=${planId}`, {
         credentials: 'include',
       });
       
+      console.log('Thread API response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('Thread API response data:', data);
         setThreads(data.threads || []);
       } else {
-        console.error('Failed to load threads:', response.status);
+        const errorText = await response.text();
+        console.error('Failed to load threads:', response.status, response.statusText, errorText);
       }
     } catch (error) {
       console.error('Failed to load threads:', error);
@@ -110,7 +115,7 @@ export default function ChatInterface({
     }]);
 
     try {
-      const response = await fetch(`/api/chat/threads/${threadId}/messages`, {
+      const response = await fetch(`/api/chat/thread/${threadId}/messages`, {
         credentials: 'include',
       });
 
