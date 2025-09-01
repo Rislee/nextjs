@@ -1,4 +1,4 @@
-// app/api/chat/route.ts - 메시지 저장 기능 추가
+// app/api/chat/route.ts - 쓰레드 저장 로직 개선
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -124,25 +124,64 @@ export async function POST(request: NextRequest) {
       isNewThread = true;
       console.log("New thread created:", currentThreadId);
       
-      // Supabase에 thread 저장 (제목은 첫 메시지의 일부로)
+      // === 개선된 쓰레드 저장 로직 ===
       const threadTitle = message.length > 30 ? message.substring(0, 30) + '...' : message;
       
       try {
-        await supabaseAdmin.from('user_threads').upsert({
+        console.log("=== Saving thread to database ===");
+        console.log("Thread data:", {
           user_id: uid,
           plan_id: planId,
           thread_id: currentThreadId,
-          title: threadTitle,
-          first_message: message,
-          last_message_at: new Date().toISOString(),
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,plan_id,thread_id'
+          title: threadTitle
         });
-        
-        console.log("Thread saved to database");
+
+        // 먼저 기존 쓰레드가 있는지 확인
+        const { data: existingThread, error: checkError } = await supabaseAdmin
+          .from('user_threads')
+          .select('thread_id')
+          .eq('user_id', uid)
+          .eq('plan_id', planId)
+          .eq('thread_id', currentThreadId)
+          .maybeSingle();
+
+        console.log("Existing thread check:", {
+          found: !!existingThread,
+          error: checkError?.message || 'none'
+        });
+
+        if (!existingThread) {
+          // 새 쓰레드 삽입
+          const { data: insertResult, error: insertError } = await supabaseAdmin
+            .from('user_threads')
+            .insert({
+              user_id: uid,
+              plan_id: planId,
+              thread_id: currentThreadId,
+              title: threadTitle,
+              first_message: message,
+              last_message_at: new Date().toISOString(),
+              created_at: new Date().toISOString()
+            })
+            .select('*')
+            .single();
+
+          console.log("Thread insert result:", {
+            success: !!insertResult,
+            error: insertError?.message || 'none',
+            data: insertResult
+          });
+
+          if (insertError) {
+            console.error("Thread save error:", insertError);
+            // 에러가 있어도 채팅은 계속 진행
+          }
+        } else {
+          console.log("Thread already exists, skipping insert");
+        }
       } catch (dbError) {
-        console.error("Failed to save thread:", dbError);
+        console.error("Database error during thread save:", dbError);
+        // DB 오류가 있어도 채팅은 계속 진행
       }
     } else {
       console.log("Using existing thread:", currentThreadId);
@@ -176,14 +215,23 @@ export async function POST(request: NextRequest) {
 
     // 사용자 메시지 저장 (DB)
     try {
-      await supabaseAdmin.from('chat_messages').insert({
-        thread_id: currentThreadId,
-        user_id: uid,
-        plan_id: planId,
-        role: 'user',
-        content: message,
+      console.log("=== Saving user message ===");
+      const { data: userMsgResult, error: userMsgError } = await supabaseAdmin
+        .from('chat_messages')
+        .insert({
+          thread_id: currentThreadId,
+          user_id: uid,
+          plan_id: planId,
+          role: 'user',
+          content: message,
+        })
+        .select('*')
+        .single();
+
+      console.log("User message save result:", {
+        success: !!userMsgResult,
+        error: userMsgError?.message || 'none'
       });
-      console.log("User message saved to database");
     } catch (error) {
       console.error("Failed to save user message:", error);
     }
@@ -270,22 +318,32 @@ export async function POST(request: NextRequest) {
 
     // AI 응답 메시지 저장 (DB)
     try {
-      await supabaseAdmin.from('chat_messages').insert({
-        thread_id: currentThreadId,
-        user_id: uid,
-        plan_id: planId,
-        role: 'assistant',
-        content: responseText,
+      console.log("=== Saving assistant message ===");
+      const { data: assistantMsgResult, error: assistantMsgError } = await supabaseAdmin
+        .from('chat_messages')
+        .insert({
+          thread_id: currentThreadId,
+          user_id: uid,
+          plan_id: planId,
+          role: 'assistant',
+          content: responseText,
+        })
+        .select('*')
+        .single();
+
+      console.log("Assistant message save result:", {
+        success: !!assistantMsgResult,
+        error: assistantMsgError?.message || 'none'
       });
-      console.log("Assistant message saved to database");
     } catch (error) {
       console.error("Failed to save assistant message:", error);
     }
 
-    // 사용량 기록
+    // 사용량 기록 및 Thread 업데이트
     try {
       const today = new Date().toISOString().split('T')[0];
       
+      // 사용량 업데이트
       await supabaseAdmin.rpc('increment_chat_usage', {
         p_user_id: uid,
         p_plan_id: planId,
@@ -293,16 +351,21 @@ export async function POST(request: NextRequest) {
       });
       
       // Thread 최종 메시지 시간 업데이트
-      await supabaseAdmin.from('user_threads')
+      const { error: updateError } = await supabaseAdmin
+        .from('user_threads')
         .update({
           last_message_at: new Date().toISOString()
         })
         .eq('user_id', uid)
         .eq('plan_id', planId)
         .eq('thread_id', currentThreadId);
+
+      console.log("Thread update result:", {
+        error: updateError?.message || 'none'
+      });
       
     } catch (usageError) {
-      console.error("Failed to record usage:", usageError);
+      console.error("Failed to record usage or update thread:", usageError);
     }
 
     return NextResponse.json(
@@ -319,7 +382,9 @@ export async function POST(request: NextRequest) {
 
   } catch (error: unknown) {
     const err = error as Error;
-    console.error("Chat API Error:", err.message);
+    console.error("=== Chat API Error ===");
+    console.error("Error message:", err.message);
+    console.error("Stack trace:", err.stack);
     
     return NextResponse.json(
       { 
