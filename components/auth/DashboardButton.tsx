@@ -1,12 +1,10 @@
-
+// components/auth/DashboardButton.tsx
 'use client';
 
 import { useEffect, useState } from 'react';
-import LogoutButton from '@/components/auth/LogoutButton';
 
-export default function AuthStatusButton() {
+export default function DashboardButton() {
   const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>('');
 
   useEffect(() => {
     const checkAuthStatus = async () => {
@@ -15,26 +13,16 @@ export default function AuthStatusButton() {
         const uidCookie = cookies.find(cookie => cookie.startsWith('uid='));
         const uidValue = uidCookie ? uidCookie.split('=')[1] : null;
         
-        console.log('=== Auth Status Check ===');
-        console.log('All cookies:', document.cookie);
-        console.log('UID cookie:', uidCookie);
-        console.log('UID value:', uidValue);
-        
         try {
           const response = await fetch('/api/me/summary', { 
             credentials: 'include',
             cache: 'no-store'
           });
           
-          console.log('API response status:', response.status);
-          
           if (response.status === 200) {
             const data = await response.json();
-            console.log('API response data:', data);
-            
             if (data.ok && data.uid) {
               setLoggedIn(true);
-              setDebugInfo(`API: OK | UID: ${data.uid.substring(0, 8)}...`);
               return;
             }
           }
@@ -44,19 +32,14 @@ export default function AuthStatusButton() {
         
         const hasValidUid = Boolean(uidValue && uidValue !== '' && uidValue !== 'undefined');
         setLoggedIn(hasValidUid);
-        setDebugInfo(`Cookie: ${hasValidUid ? 'Yes' : 'No'} | Total: ${cookies.length}`);
-        
-        console.log('Final auth state:', hasValidUid);
         
       } catch (error) {
         console.error('Auth check error:', error);
         setLoggedIn(false);
-        setDebugInfo('Error');
       }
     };
 
     checkAuthStatus();
-
     const interval = setInterval(checkAuthStatus, 2000);
 
     const handleFocus = () => {
@@ -88,7 +71,6 @@ export default function AuthStatusButton() {
         const hasValidUid = Boolean(uidValue && uidValue !== '' && uidValue !== 'undefined');
         
         setLoggedIn(hasValidUid);
-        setDebugInfo(`Updated: ${hasValidUid ? 'Yes' : 'No'}`);
       }, 100);
     };
 
@@ -99,38 +81,14 @@ export default function AuthStatusButton() {
     };
   }, []);
 
-  if (loggedIn === null) {
-    return (
-      <div style={{
-        background: 'var(--bg-tertiary)',
-        border: '1px solid var(--border-primary)',
-        borderRadius: '8px',
-        padding: '8px 16px',
-        color: 'var(--text-secondary)',
-        fontSize: '14px',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px'
-      }}>
-        <div className="loading-spinner" style={{
-          width: '12px',
-          height: '12px',
-          border: '2px solid var(--border-primary)',
-          borderTop: '2px solid var(--text-secondary)',
-          borderRadius: '50%',
-          animation: 'spin 1s linear infinite'
-        }}></div>
-      </div>
-    );
-  }
-
-  if (loggedIn) {
-    return <LogoutButton />;
+  // 로그인되지 않은 사용자에게는 버튼을 보여주지 않음
+  if (!loggedIn) {
+    return null;
   }
 
   return (
     <a 
-      href="/auth/sign-in" 
+      href="/dashboard" 
       className="inneros-button-secondary"
       style={{
         textDecoration: 'none',
@@ -143,11 +101,9 @@ export default function AuthStatusButton() {
       }}
     >
       <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-        <path d="M10 17l5-5-5-5v3H3v4h7v3z"/>
-        <path d="M21 3H11v2h10v14H11v2h10c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+        <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
       </svg>
-      로그인
+      대시보드
     </a>
   );
 }
-

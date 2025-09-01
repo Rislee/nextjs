@@ -143,20 +143,20 @@ function Content() {
 
   return (
     <div className="inneros-page" style={{ 
-      minHeight: '100vh', 
+      height: '100vh', 
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center',
-      padding: '24px',
-      background: 'var(--black-100)'
+      padding: '16px',
+      background: 'var(--black-100)',
+      overflow: 'hidden'
     }}>
       <div style={{ 
         width: '100%', 
         maxWidth: '400px',
         background: 'var(--black-80)', /* 로그인 섹션 배경 */
         borderRadius: '16px',
-        padding: '40px',
-        border: '1px solid rgba(255, 255, 255, 0.1)'
+        padding: '32px'
       }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '40px' }}>
@@ -206,8 +206,10 @@ function Content() {
                 fontSize: '16px',
                 color: 'var(--white)',
                 width: '100%',
+                height: '48px',
                 transition: 'all 0.2s ease-in-out',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                outline: 'none'
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = 'var(--brand-color)';
@@ -245,8 +247,10 @@ function Content() {
                 fontSize: '16px',
                 color: 'var(--white)',
                 width: '100%',
+                height: '48px',
                 transition: 'all 0.2s ease-in-out',
-                boxSizing: 'border-box'
+                boxSizing: 'border-box',
+                outline: 'none'
               }}
               onFocus={(e) => {
                 e.target.style.borderColor = 'var(--brand-color)';
@@ -284,13 +288,11 @@ function Content() {
             onMouseOver={(e) => {
               if (!loading) {
                 e.currentTarget.style.background = 'var(--white)';
-                e.currentTarget.style.transform = 'translateY(-1px)';
               }
             }}
             onMouseOut={(e) => {
               if (!loading) {
                 e.currentTarget.style.background = 'var(--brand-color)';
-                e.currentTarget.style.transform = 'translateY(0)';
               }
             }}
           >
@@ -335,7 +337,7 @@ function Content() {
           }}></div>
         </div>
 
-        {/* Google 로그인 */}
+        {/* Google 로그인 - 피드백 반영 */}
         <button
           onClick={signInWithGoogle}
           style={{
@@ -348,27 +350,16 @@ function Content() {
             fontSize: '16px',
             fontWeight: '400',
             cursor: 'pointer',
-            transition: 'all 0.2s ease-in-out',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-start', /* 텍스트 왼쪽에 붙게 */
+            justifyContent: 'center', /* 가운데 정렬 */
             gap: '12px',
             minHeight: '48px',
             width: '100%',
             marginBottom: '24px'
           }}
-          onMouseOver={(e) => {
-            e.currentTarget.style.background = 'var(--black-60)';
-            e.currentTarget.style.borderColor = 'var(--brand-color)';
-            e.currentTarget.style.transform = 'translateY(-1px)';
-          }}
-          onMouseOut={(e) => {
-            e.currentTarget.style.background = 'var(--black-80)';
-            e.currentTarget.style.borderColor = 'transparent';
-            e.currentTarget.style.transform = 'translateY(0)';
-          }}
         >
-          {/* 구글 로고 좌상단에 위치 */}
+          {/* 구글 로고 */}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
             <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
             <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>

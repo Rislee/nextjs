@@ -85,75 +85,168 @@ function Content() {
 
   return (
     <div className="inneros-page" style={{ 
-      minHeight: '100vh', 
+      height: '100vh', 
       display: 'flex', 
       alignItems: 'center', 
       justifyContent: 'center',
-      padding: '24px'
+      padding: '16px',
+      background: 'var(--black-100)',
+      overflow: 'hidden'
     }}>
-      <div className="inneros-card" style={{ 
+      <div style={{ 
         width: '100%', 
         maxWidth: '400px',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-primary)'
+        background: 'var(--black-80)',
+        borderRadius: '16px',
+        padding: '32px'
       }}>
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '40px' }}>
           <h1 style={{ 
             fontSize: '28px', 
             fontWeight: '600', 
-            color: 'var(--text-primary)', 
-            margin: '0 0 8px 0' 
+            color: 'var(--white)', 
+            margin: '0 0 8px 0',
+            fontFamily: 'var(--font-family)'
           }}>
             회원가입
           </h1>
           <p style={{ 
-            color: 'var(--text-secondary)', 
+            color: 'var(--text-color)', 
             fontSize: '16px', 
-            margin: '0' 
+            margin: '0',
+            fontFamily: 'var(--font-family)'
           }}>
             새로운 운영체제를 시작해보세요
           </p>
         </div>
 
-        <form onSubmit={onSubmit} className="inneros-form">
-          <div className="inneros-form-group">
-            <label className="inneros-label">이름 (선택사항)</label>
+        <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <label style={{
+              color: 'var(--white)',
+              fontSize: '14px',
+              fontWeight: '400',
+              fontFamily: 'var(--font-family)',
+              display: 'block'
+            }}>
+              이름 (선택사항)
+            </label>
             <input
               type="text"
               placeholder="홍길동"
               value={fullName}
               onChange={(e) => setFullName(e.target.value)}
-              className="inneros-input"
+              style={{
+                background: 'var(--input-bg)',
+                border: '2px solid transparent',
+                borderRadius: '8px',
+                padding: '16px',
+                fontFamily: 'var(--font-family)',
+                fontSize: '16px',
+                color: 'var(--white)',
+                width: '100%',
+                height: '48px',
+                transition: 'all 0.2s ease-in-out',
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--brand-color)';
+                e.target.style.background = 'var(--black-80)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'transparent';
+                e.target.style.background = 'var(--input-bg)';
+              }}
             />
           </div>
 
-          <div className="inneros-form-group">
-            <label className="inneros-label">이메일</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <label style={{
+              color: 'var(--white)',
+              fontSize: '14px',
+              fontWeight: '400',
+              fontFamily: 'var(--font-family)',
+              display: 'block'
+            }}>
+              이메일
+            </label>
             <input
               type="email"
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="inneros-input"
+              style={{
+                background: 'var(--input-bg)',
+                border: '2px solid transparent',
+                borderRadius: '8px',
+                padding: '16px',
+                fontFamily: 'var(--font-family)',
+                fontSize: '16px',
+                color: 'var(--white)',
+                width: '100%',
+                height: '48px',
+                transition: 'all 0.2s ease-in-out',
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--brand-color)';
+                e.target.style.background = 'var(--black-80)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'transparent';
+                e.target.style.background = 'var(--input-bg)';
+              }}
             />
           </div>
           
-          <div className="inneros-form-group">
-            <label className="inneros-label">비밀번호</label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <label style={{
+              color: 'var(--white)',
+              fontSize: '14px',
+              fontWeight: '400',
+              fontFamily: 'var(--font-family)',
+              display: 'block'
+            }}>
+              비밀번호
+            </label>
             <input
               type="password"
               placeholder="안전한 비밀번호를 입력하세요"
               value={pw}
               onChange={(e) => setPw(e.target.value)}
               required
-              className="inneros-input"
+              style={{
+                background: 'var(--input-bg)',
+                border: '2px solid transparent',
+                borderRadius: '8px',
+                padding: '16px',
+                fontFamily: 'var(--font-family)',
+                fontSize: '16px',
+                color: 'var(--white)',
+                width: '100%',
+                height: '48px',
+                transition: 'all 0.2s ease-in-out',
+                boxSizing: 'border-box',
+                outline: 'none'
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--brand-color)';
+                e.target.style.background = 'var(--black-80)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'transparent';
+                e.target.style.background = 'var(--input-bg)';
+              }}
             />
             <div style={{ 
               fontSize: '12px', 
-              color: 'var(--text-muted)', 
-              marginTop: '4px' 
+              color: 'var(--text-color)', 
+              marginTop: '4px',
+              fontFamily: 'var(--font-family)'
             }}>
               최소 8자 이상의 비밀번호를 사용하세요
             </div>
@@ -162,15 +255,48 @@ function Content() {
           <button
             type="submit"
             disabled={loading}
-            className="inneros-button"
-            style={{ width: '100%' }}
+            style={{
+              background: 'var(--brand-color)',
+              color: 'var(--black-100)',
+              border: 'none',
+              borderRadius: '80px',
+              padding: '12px 24px',
+              fontFamily: 'var(--font-family)',
+              fontSize: '16px',
+              fontWeight: '600',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease-in-out',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              minHeight: '48px',
+              width: '100%',
+              opacity: loading ? 0.7 : 1
+            }}
+            onMouseOver={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = 'var(--white)';
+              }
+            }}
+            onMouseOut={(e) => {
+              if (!loading) {
+                e.currentTarget.style.background = 'var(--brand-color)';
+              }
+            }}
           >
             {loading ? '가입 처리 중...' : '계정 만들기'}
           </button>
         </form>
 
         {notice && (
-          <div className={notice.includes('완료') || notice.includes('확인') ? 'inneros-success' : 'inneros-error'}>
+          <div style={{
+            color: notice.includes('완료') || notice.includes('확인') ? '#22c55e' : '#ef4444',
+            fontSize: '14px',
+            textAlign: 'center',
+            marginTop: '16px',
+            fontFamily: 'var(--font-family)'
+          }}>
             {notice}
           </div>
         )}
@@ -179,37 +305,54 @@ function Content() {
         <div style={{ 
           textAlign: 'center', 
           fontSize: '12px', 
-          color: 'var(--text-muted)', 
+          color: 'var(--text-color)', 
           marginTop: '24px',
-          lineHeight: '1.5'
+          lineHeight: '1.5',
+          fontFamily: 'var(--font-family)'
         }}>
           가입하시면 InnerOS의{' '}
-          <a href="https://www.inneros.co.kr/terms" style={{ color: 'var(--accent-color)', textDecoration: 'none' }}>
+          <a href="https://www.inneros.co.kr/terms" style={{ color: 'var(--brand-color)', textDecoration: 'none' }}>
             서비스 약관
           </a>과{' '}
-          <a href="https://www.inneros.co.kr/privacy" style={{ color: 'var(--accent-color)', textDecoration: 'none' }}>
+          <a href="https://www.inneros.co.kr/privacy" style={{ color: 'var(--brand-color)', textDecoration: 'none' }}>
             개인정보 처리방침
           </a>에 동의하는 것으로 간주됩니다.
         </div>
 
         {/* 로그인 링크 */}
         <div style={{ textAlign: 'center', marginTop: '24px' }}>
-          <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>
+          <span style={{ 
+            color: 'var(--text-color)', 
+            fontSize: '14px',
+            fontFamily: 'var(--font-family)'
+          }}>
             이미 계정이 있으신가요?{' '}
           </span>
           <a
             href={next ? `/auth/sign-in?next=${encodeURIComponent(next)}` : '/auth/sign-in'}
             style={{ 
-              color: 'var(--accent-color)', 
+              color: 'var(--white)', 
               textDecoration: 'none',
               fontSize: '14px',
-              fontWeight: '500'
+              fontWeight: '400',
+              fontFamily: 'var(--font-family)',
+              borderBottom: '1px solid var(--white)'
             }}
           >
             로그인
           </a>
         </div>
       </div>
+
+      <style jsx>{`
+        /* 플레이스홀더 스타일 */
+        input::placeholder {
+          color: var(--text-color) !important;
+        }
+        
+        /* Pretendard 폰트 로드 */
+        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css');
+      `}</style>
     </div>
   );
 }

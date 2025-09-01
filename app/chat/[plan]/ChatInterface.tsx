@@ -1,4 +1,4 @@
-// app/chat/[plan]/ChatInterface.tsx - InnerOS 디자인 적용
+// app/chat/[plan]/ChatInterface.tsx - Claude 스타일 채팅 인터페이스
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
@@ -40,7 +40,7 @@ export default function ChatInterface({
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(existingThreadId);
   const [error, setError] = useState<string>('');
   const [threads, setThreads] = useState<ThreadInfo[]>([]);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false); // 기본적으로 닫혀있음
   const [loadingThreads, setLoadingThreads] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -238,151 +238,274 @@ export default function ChatInterface({
   };
 
   return (
-    <div className="inneros-chat-container">
+    <div style={{ 
+      display: 'flex', 
+      height: '100vh', 
+      background: 'var(--bg-primary)',
+      position: 'relative'
+    }}>
       {/* 사이드바 - 쓰레드 목록 */}
-      <div className={`inneros-chat-sidebar ${!sidebarOpen ? 'collapsed' : ''}`}>
-        {/* 사이드바 헤더 */}
-        <div style={{ 
-          padding: '20px',
-          borderBottom: '1px solid var(--border-primary)',
-          background: 'var(--bg-secondary)'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between',
-            marginBottom: '16px'
-          }}>
-            <h2 style={{ 
-              fontSize: '16px', 
-              fontWeight: '600', 
-              color: 'var(--text-primary)',
-              margin: '0'
-            }}>
-              대화 목록
-            </h2>
-            <button
-              onClick={() => setSidebarOpen(false)}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '4px',
-                borderRadius: '4px',
-                transition: 'var(--transition-base)'
-              }}
-            >
-              <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          </div>
-          
-          <button
-            onClick={startNewChat}
-            className="inneros-button"
-            style={{
-              width: '100%',
-              fontSize: '14px',
-              minHeight: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}
-          >
-            <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-            새 대화
-          </button>
-        </div>
-
-        {/* 쓰레드 목록 */}
-        <div className="inneros-thread-list">
-          {loadingThreads ? (
+      <div style={{
+        width: sidebarOpen ? '280px' : '60px', // 닫혔을 때도 60px 보이게
+        background: 'var(--bg-secondary)',
+        borderRight: '1px solid var(--border-primary)',
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'width 0.3s ease',
+        position: 'fixed',
+        left: 0,
+        top: '72px', // 레이아웃 헤더 높이
+        bottom: 0,
+        zIndex: 20
+      }}>
+        {sidebarOpen ? (
+          // 열린 상태 - 기존 UI
+          <>
+            {/* 사이드바 헤더 */}
             <div style={{ 
-              textAlign: 'center', 
-              color: 'var(--text-secondary)', 
-              fontSize: '14px',
-              padding: '20px 0'
+              padding: '20px',
+              borderBottom: '1px solid var(--border-primary)',
+              background: 'var(--bg-secondary)'
             }}>
-              대화 목록을 불러오는 중...
-            </div>
-          ) : threads.length === 0 ? (
-            <div style={{ 
-              textAlign: 'center', 
-              color: 'var(--text-secondary)', 
-              fontSize: '14px',
-              padding: '20px 0'
-            }}>
-              아직 대화가 없습니다
-            </div>
-          ) : (
-            threads.map((thread) => (
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                marginBottom: '16px'
+              }}>
+                <h2 style={{ 
+                  fontSize: '16px', 
+                  fontWeight: '600', 
+                  color: 'var(--text-primary)',
+                  margin: '0'
+                }}>
+                  대화 목록
+                </h2>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    borderRadius: '4px'
+                  }}
+                >
+                  <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" fill="none"/>
+                  </svg>
+                </button>
+              </div>
+              
               <button
-                key={thread.id}
-                onClick={() => selectThread(thread.id)}
-                className={`inneros-thread-item ${currentThreadId === thread.id ? 'active' : ''}`}
+                onClick={startNewChat}
+                style={{
+                  background: 'var(--brand-color)',
+                  color: 'var(--black-100)',
+                  border: 'none',
+                  borderRadius: '80px',
+                  padding: '12px 24px',
+                  fontFamily: 'var(--font-family)',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  width: '100%',
+                  minHeight: '40px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s ease-in-out'
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.background = 'var(--white)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = 'var(--brand-color)';
+                }}
               >
-                <div style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '500', 
-                  marginBottom: '4px',
-                  textAlign: 'left'
-                }}>
-                  {thread.title}
-                </div>
-                <div style={{ 
-                  fontSize: '12px', 
-                  opacity: 0.7,
-                  textAlign: 'left',
-                  marginBottom: '4px'
-                }}>
-                  {thread.lastMessage}
-                </div>
-                <div style={{ 
-                  fontSize: '11px', 
-                  opacity: 0.6,
-                  textAlign: 'left'
-                }}>
-                  {thread.updatedAt.toLocaleDateString()} • {thread.messageCount}개
-                </div>
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 5v14M5 12h14"/>
+                </svg>
+                새 대화
               </button>
-            ))
-          )}
-        </div>
-      </div>
+            </div>
 
-      {/* 메인 채팅 영역 */}
-      <div className="inneros-chat-main">
-        {/* 헤더 */}
-        <div className="inneros-chat-header">
-          {!sidebarOpen && (
+            {/* 쓰레드 목록 */}
+            <div style={{
+              padding: '16px',
+              flex: 1,
+              overflowY: 'auto'
+            }}>
+              {loadingThreads ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  color: 'var(--text-secondary)', 
+                  fontSize: '14px',
+                  padding: '20px 0'
+                }}>
+                  대화 목록을 불러오는 중...
+                </div>
+              ) : threads.length === 0 ? (
+                <div style={{ 
+                  textAlign: 'center', 
+                  color: 'var(--text-secondary)', 
+                  fontSize: '14px',
+                  padding: '20px 0'
+                }}>
+                  아직 대화가 없습니다
+                </div>
+              ) : (
+                threads.map((thread) => (
+                  <button
+                    key={thread.id}
+                    onClick={() => selectThread(thread.id)}
+                    style={{
+                      background: currentThreadId === thread.id ? 'var(--accent-color)' : 'transparent',
+                      color: currentThreadId === thread.id ? 'white' : 'var(--text-primary)',
+                      border: '1px solid transparent',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      cursor: 'pointer',
+                      marginBottom: '8px',
+                      width: '100%',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div style={{ 
+                      fontSize: '14px', 
+                      fontWeight: '500', 
+                      marginBottom: '4px'
+                    }}>
+                      {thread.title}
+                    </div>
+                    <div style={{ 
+                      fontSize: '12px', 
+                      opacity: 0.7,
+                      marginBottom: '4px'
+                    }}>
+                      {thread.lastMessage}
+                    </div>
+                    <div style={{ 
+                      fontSize: '11px', 
+                      opacity: 0.6
+                    }}>
+                      {thread.updatedAt.toLocaleDateString()} • {thread.messageCount}개
+                    </div>
+                  </button>
+                ))
+              )}
+            </div>
+          </>
+        ) : (
+          // 닫힌 상태 - 컴팩트 버튼들
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            padding: '20px 8px',
+            alignItems: 'center'
+          }}>
+            {/* 1. 사이드바 열기 버튼 */}
             <button
               onClick={() => setSidebarOpen(true)}
+              title="사이드바 열기"
               style={{
                 background: 'none',
                 border: 'none',
                 color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                padding: '8px',
                 borderRadius: '8px',
-                transition: 'var(--transition-base)'
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = 'var(--bg-tertiary)';
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = 'none';
+                width: '44px',
+                height: '44px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
               }}
             >
               <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M3 12h18M3 6h18M3 18h18"/>
+                <path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2" fill="none"/>
               </svg>
             </button>
-          )}
-          
+
+            {/* 2. 새 대화 버튼 (플러스) */}
+            <button
+              onClick={startNewChat}
+              title="새 대화"
+              style={{
+                background: 'var(--brand-color)',
+                color: 'var(--black-100)', // 검은색으로 설정
+                border: 'none',
+                borderRadius: '50%',
+                width: '44px',
+                height: '44px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease-in-out'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = 'var(--white)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = 'var(--brand-color)';
+              }}
+            >
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
+
+            {/* 3. 채팅 목록 버튼 */}
+            <button
+              title="대화 목록"
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                borderRadius: '8px',
+                width: '44px',
+                height: '44px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+              </svg>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* 메인 채팅 영역 */}
+      <div style={{ 
+        marginLeft: sidebarOpen ? '280px' : '60px', // 닫혔을 때도 60px 마진
+        transition: 'margin-left 0.3s ease',
+        display: 'flex',
+        flexDirection: 'column',
+        flex: 1,
+        height: '100vh'
+      }}>
+        {/* 헤더 - 고정 */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderBottom: '1px solid var(--border-primary)',
+          padding: '16px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          position: 'fixed',
+          top: '72px', // 레이아웃 헤더 높이만큼
+          left: sidebarOpen ? '280px' : '60px', // 닫혔을 때도 60px
+          right: 0,
+          zIndex: 10,
+          transition: 'left 0.3s ease'
+        }}>
           <div>
             <h1 style={{ 
               fontSize: '18px', 
@@ -400,29 +523,40 @@ export default function ChatInterface({
               {userEmail}
             </p>
           </div>
-          
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <a
-              href="/dashboard"
-              className="inneros-button-secondary"
-              style={{
-                textDecoration: 'none',
-                fontSize: '14px',
-                minHeight: '36px',
-                padding: '8px 16px'
-              }}
-            >
-              대시보드
-            </a>
-          </div>
         </div>
 
-        {/* 메시지 영역 */}
-        <div className="inneros-chat-messages">
+        {/* 메시지 영역 - 스크롤 가능 */}
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          padding: '24px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          marginTop: '88px', // 헤더 높이만큼
+          marginBottom: '120px' // 입력창 높이만큼
+        }}>
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`inneros-message ${message.role}`}
+              style={{
+                maxWidth: '70%',
+                padding: '16px',
+                borderRadius: '16px',
+                fontSize: '15px',
+                lineHeight: '1.5',
+                ...(message.role === 'user' ? {
+                  background: 'var(--accent-color)',
+                  color: 'white',
+                  alignSelf: 'flex-end',
+                  marginLeft: 'auto'
+                } : {
+                  background: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-primary)',
+                  color: 'var(--text-primary)',
+                  alignSelf: 'flex-start'
+                })
+              }}
             >
               <div style={{ marginBottom: '8px' }}>
                 {message.content}
@@ -437,16 +571,47 @@ export default function ChatInterface({
           ))}
           
           {loading && (
-            <div className="inneros-message assistant">
+            <div style={{
+              maxWidth: '70%',
+              padding: '16px',
+              borderRadius: '16px',
+              fontSize: '15px',
+              lineHeight: '1.5',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-primary)',
+              color: 'var(--text-primary)',
+              alignSelf: 'flex-start'
+            }}>
               <div style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
                 gap: '8px' 
               }}>
-                <div className="loading-dots">
-                  <div></div>
-                  <div></div>
-                  <div></div>
+                <div style={{
+                  display: 'flex',
+                  gap: '4px'
+                }}>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: 'var(--text-secondary)',
+                    animation: 'dot-pulse 1.5s infinite ease-in-out'
+                  }}></div>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: 'var(--text-secondary)',
+                    animation: 'dot-pulse 1.5s infinite ease-in-out -0.16s'
+                  }}></div>
+                  <div style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: 'var(--text-secondary)',
+                    animation: 'dot-pulse 1.5s infinite ease-in-out -0.32s'
+                  }}></div>
                 </div>
                 AI가 답변을 생성하고 있습니다...
               </div>
@@ -456,8 +621,17 @@ export default function ChatInterface({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* 입력 영역 */}
-        <div className="inneros-chat-input">
+        {/* 입력 영역 - 고정 */}
+        <div style={{
+          background: 'var(--bg-secondary)',
+          borderTop: '1px solid var(--border-primary)',
+          padding: '24px',
+          position: 'fixed',
+          bottom: 0,
+          left: sidebarOpen ? '280px' : '60px', // 닫혔을 때도 60px
+          right: 0,
+          transition: 'left 0.3s ease'
+        }}>
           {error && (
             <div style={{ 
               background: 'rgba(239, 68, 68, 0.1)',
@@ -472,23 +646,55 @@ export default function ChatInterface({
             </div>
           )}
           
-          <div className="inneros-chat-input-form">
+          <div style={{
+            display: 'flex',
+            gap: '12px',
+            alignItems: 'flex-end',
+            maxWidth: '1000px',
+            margin: '0 auto'
+          }}>
             <textarea
               ref={textareaRef}
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyPress}
               placeholder="메시지를 입력하세요... (Shift+Enter로 줄바꿈)"
-              className="inneros-chat-textarea"
               disabled={loading}
+              style={{
+                flex: 1,
+                background: 'var(--bg-input)',
+                border: '1px solid var(--border-primary)',
+                borderRadius: '12px',
+                padding: '16px',
+                color: 'var(--text-primary)',
+                fontFamily: 'var(--font-family)',
+                fontSize: '16px',
+                resize: 'none',
+                minHeight: '52px',
+                maxHeight: '120px',
+                outline: 'none'
+              }}
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() || loading}
-              className="inneros-chat-send-button"
+              style={{
+                background: 'var(--accent-color)',
+                color: 'white',
+                border: 'none',
+                borderRadius: '12px',
+                padding: '16px',
+                cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+                minWidth: '52px',
+                height: '52px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: loading || !input.trim() ? 0.5 : 1
+              }}
             >
               {loading ? (
-                <div className="loading-spinner" style={{
+                <div style={{
                   width: '16px',
                   height: '16px',
                   border: '2px solid rgba(255,255,255,0.3)',
@@ -521,27 +727,6 @@ export default function ChatInterface({
           100% { transform: rotate(360deg); }
         }
         
-        .loading-dots {
-          display: flex;
-          gap: 4px;
-        }
-        
-        .loading-dots div {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          background: var(--text-secondary);
-          animation: dot-pulse 1.5s infinite ease-in-out;
-        }
-        
-        .loading-dots div:nth-child(1) {
-          animation-delay: -0.32s;
-        }
-        
-        .loading-dots div:nth-child(2) {
-          animation-delay: -0.16s;
-        }
-        
         @keyframes dot-pulse {
           0%, 80%, 100% {
             opacity: 0.3;
@@ -550,27 +735,6 @@ export default function ChatInterface({
           40% {
             opacity: 1;
             transform: scale(1);
-          }
-        }
-        
-        /* Mobile responsive */
-        @media (max-width: 768px) {
-          .inneros-chat-sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            z-index: 100;
-            transform: translateX(-100%);
-            transition: transform 0.3s ease;
-          }
-          
-          .inneros-chat-sidebar:not(.collapsed) {
-            transform: translateX(0);
-          }
-          
-          .inneros-chat-sidebar.collapsed {
-            width: 280px;
           }
         }
       `}</style>
