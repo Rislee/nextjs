@@ -328,7 +328,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                 </div>
               </div>
 
-              {/* 4. 이용약관 동의 */}
+              {/* 5. 이용약관 동의 */}
               <div className="inneros-card">
                 <h2 style={{ 
                   fontSize: '20px', 
