@@ -1,4 +1,4 @@
-// lib/portone/v1-client.ts - 주문자 정보 포함
+// lib/portone/v1-client.ts - PG사 파라미터 추가
 declare global { interface Window { IMP?: any } }
 
 type PayArgs = {
@@ -10,6 +10,7 @@ type PayArgs = {
   buyer_email?: string;
   buyer_tel?: string;
   pay_method?: 'card' | 'trans' | 'vbank' | 'phone';
+  pg?: string; // PG사 선택 파라미터 추가
 };
 
 export async function requestIamportPay({ 
@@ -20,12 +21,12 @@ export async function requestIamportPay({
   buyer_name,
   buyer_email,
   buyer_tel,
-  pay_method = 'card'
+  pay_method = 'card',
+  pg = 'settle' // 기본값 유지
 }: PayArgs) {
   const IMP = window.IMP;
   if (!IMP) throw new Error('IMP SDK not loaded');
 
-  // BOTH 지원: NEXT_PUBLIC_IMP_CODE / NEXT_PUBLIC_IAMPORT_CODE
   const impCode =
     process.env.NEXT_PUBLIC_IMP_CODE ||
     process.env.NEXT_PUBLIC_IAMPORT_CODE;
@@ -33,12 +34,12 @@ export async function requestIamportPay({
 
   IMP.init(impCode);
 
-  await new Promise<void>((resolve) => setTimeout(resolve, 0)); // 이벤트 루프 1틱 양보(안전)
+  await new Promise<void>((resolve) => setTimeout(resolve, 0));
 
   return new Promise<void>((resolve, reject) => {
     IMP.request_pay(
       {
-        pg: 'settle',
+        pg, // 동적 PG사 설정
         pay_method,
         merchant_uid,
         name,
@@ -46,10 +47,9 @@ export async function requestIamportPay({
         buyer_name,
         buyer_email,
         buyer_tel,
-        m_redirect_url: redirectUrl, // 모바일 리다이렉트
-        // 추가 옵션들
-        digital: true, // 디지털 상품
-        confirm_url: `${window.location.origin}/api/webhook/portone`, // 웹훅 URL
+        m_redirect_url: redirectUrl,
+        digital: true,
+        confirm_url: `${window.location.origin}/api/webhook/portone`,
       },
       (rsp: any) => {
         if (rsp?.success) resolve();

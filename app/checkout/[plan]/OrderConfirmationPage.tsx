@@ -1,3 +1,4 @@
+// app/checkout/[plan]/OrderConfirmationPage.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,6 +39,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
   const [sdkReady, setSdkReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'trans'>('card');
+  const [pgProvider, setPgProvider] = useState<'settle' | 'tosspayments' | 'nice_v2'>('settle');
   const [agreements, setAgreements] = useState({
     terms: false,
     privacy: false,
@@ -127,7 +129,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
 
       const redirectUrl = `${window.location.origin}/checkout/complete`;
 
-      // 결제창 호출
+      // 결제창 호출 - PG사 파라미터 추가
       await requestIamportPay({
         merchant_uid: merchantUid,
         amount,
@@ -136,7 +138,8 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
         buyer_name: formData.name,
         buyer_email: formData.email,
         buyer_tel: formData.phone || undefined,
-        pay_method: paymentMethod
+        pay_method: paymentMethod,
+        pg: pgProvider // PG사 전달
       });
 
     } catch (error: any) {
@@ -262,7 +265,99 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                 </div>
               </div>
 
-              {/* 3. 결제 수단 */}
+              {/* 3. 결제 대행사 선택 */}
+              <div className="inneros-card">
+                <h2 style={{ 
+                  fontSize: '20px', 
+                  fontWeight: '600', 
+                  color: 'var(--text-primary)', 
+                  margin: '0 0 20px 0' 
+                }}>
+                  결제 대행사
+                </h2>
+                
+                <div style={{ display: 'grid', gap: '12px' }}>
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '16px',
+                    border: `2px solid ${pgProvider === 'settle' ? 'var(--brand-color)' : 'var(--border-primary)'}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'var(--transition-base)'
+                  }}>
+                    <input
+                      type="radio"
+                      name="pgProvider"
+                      value="settle"
+                      checked={pgProvider === 'settle'}
+                      onChange={(e) => setPgProvider(e.target.value as any)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>헥토파이낸셜</div>
+                      <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                        안정적인 결제 서비스
+                      </div>
+                    </div>
+                  </label>
+                  
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '16px',
+                    border: `2px solid ${pgProvider === 'tosspayments' ? 'var(--brand-color)' : 'var(--border-primary)'}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'var(--transition-base)'
+                  }}>
+                    <input
+                      type="radio"
+                      name="pgProvider"
+                      value="tosspayments"
+                      checked={pgProvider === 'tosspayments'}
+                      onChange={(e) => setPgProvider(e.target.value as any)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>토스페이먼츠</div>
+                      <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                        간편하고 빠른 결제
+                      </div>
+                    </div>
+                  </label>
+                  
+                  <label style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '16px',
+                    border: `2px solid ${pgProvider === 'nice_v2' ? 'var(--brand-color)' : 'var(--border-primary)'}`,
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    transition: 'var(--transition-base)'
+                  }}>
+                    <input
+                      type="radio"
+                      name="pgProvider"
+                      value="nice_v2"
+                      checked={pgProvider === 'nice_v2'}
+                      onChange={(e) => setPgProvider(e.target.value as any)}
+                      style={{ marginRight: '8px' }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>나이스페이먼츠</div>
+                      <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
+                        다양한 결제 옵션
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* 4. 결제 수단 */}
               <div className="inneros-card">
                 <h2 style={{ 
                   fontSize: '20px', 
