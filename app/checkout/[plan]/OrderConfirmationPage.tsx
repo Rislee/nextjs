@@ -17,22 +17,19 @@ const PLAN_INFO = {
     title: 'START OS',
     originalPrice: 69000,
     discountPrice: 55000,
-    description: '기본 AI 어시스턴트 서비스',
-    features: ['문서작성 AI', '업무/편지 무제한', '인쇄/다운로드 5건']
+    description: '기본 AI 어시스턴트 서비스'
   },
   SIGNATURE_OS: {
     title: 'SIGNATURE OS',
     originalPrice: 290000,
     discountPrice: 250000,
-    description: '프리미엄 AI 어시스턴트 서비스',
-    features: ['문서작성 무제한', '업무/편지 무제한', '인쇄/다운로드 무제한', '서면성상/이메일전송 200건']
+    description: '프리미엄 AI 어시스턴트 서비스'
   },
   MASTER_OS: {
     title: 'MASTER OS',
     originalPrice: 600000,
     discountPrice: 500000,
-    description: '최고급 AI 어시스턴트 서비스',
-    features: ['문서작성 무제한', '업무/편지 무제한', '인쇄/다운로드 무제한', '서면성상/이메일전송 무제한']
+    description: '최고급 AI 어시스턴트 서비스'
   }
 };
 
@@ -202,17 +199,9 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                       <h3 style={{ fontSize: '24px', fontWeight: '600', margin: '0 0 8px 0' }}>
                         {planInfo.title}
                       </h3>
-                      <p style={{ fontSize: '16px', opacity: 0.9, margin: '0 0 16px 0' }}>
+                      <p style={{ fontSize: '16px', opacity: 0.9, margin: '0' }}>
                         {planInfo.description}
                       </p>
-                      <div style={{ fontSize: '14px', opacity: 0.8 }}>
-                        주요 기능:
-                        <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
-                          {planInfo.features.map((feature, index) => (
-                            <li key={index} style={{ marginBottom: '4px' }}>{feature}</li>
-                          ))}
-                        </ul>
-                      </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '18px', textDecoration: 'line-through', opacity: 0.7 }}>

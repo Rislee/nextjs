@@ -10,9 +10,9 @@ export const revalidate = 0;
 type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 
 const PRICE: Record<PlanId, number> = {
-  START_OS: 5500000,          
-  SIGNATURE_OS: 22000000,
-  MASTER_OS: 55000000,
+  START_OS: 550000,          
+  SIGNATURE_OS: 2200000,
+  MASTER_OS: 4500000,
 };
 
 export async function POST(req: Request) {
