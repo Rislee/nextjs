@@ -1,4 +1,4 @@
-// lib/portone/v1-client.ts
+// lib/portone/v1-client.ts - 주문자 정보 포함
 declare global { interface Window { IMP?: any } }
 
 type PayArgs = {
@@ -6,9 +6,22 @@ type PayArgs = {
   name: string;
   amount: number;
   redirectUrl: string;
+  buyer_name?: string;
+  buyer_email?: string;
+  buyer_tel?: string;
+  pay_method?: 'card' | 'trans' | 'vbank' | 'phone';
 };
 
-export async function requestIamportPay({ merchant_uid, name, amount, redirectUrl }: PayArgs) {
+export async function requestIamportPay({ 
+  merchant_uid, 
+  name, 
+  amount, 
+  redirectUrl,
+  buyer_name,
+  buyer_email,
+  buyer_tel,
+  pay_method = 'card'
+}: PayArgs) {
   const IMP = window.IMP;
   if (!IMP) throw new Error('IMP SDK not loaded');
 
@@ -26,11 +39,17 @@ export async function requestIamportPay({ merchant_uid, name, amount, redirectUr
     IMP.request_pay(
       {
         pg: 'settle',
-        pay_method: 'card',
+        pay_method,
         merchant_uid,
         name,
         amount,
+        buyer_name,
+        buyer_email,
+        buyer_tel,
         m_redirect_url: redirectUrl, // 모바일 리다이렉트
+        // 추가 옵션들
+        digital: true, // 디지털 상품
+        confirm_url: `${window.location.origin}/api/webhook/portone`, // 웹훅 URL
       },
       (rsp: any) => {
         if (rsp?.success) resolve();
