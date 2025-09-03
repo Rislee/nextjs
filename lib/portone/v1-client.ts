@@ -1,4 +1,4 @@
-// lib/portone/v1-client.ts - PG사 파라미터 추가
+// lib/portone/v1-client.ts
 declare global { interface Window { IMP?: any } }
 
 type PayArgs = {
@@ -22,7 +22,7 @@ export async function requestIamportPay({
   buyer_email,
   buyer_tel,
   pay_method = 'card',
-  pg = 'settle' // 기본값 유지
+  pg = 'settle' // 기본값은 settle
 }: PayArgs) {
   const IMP = window.IMP;
   if (!IMP) throw new Error('IMP SDK not loaded');
@@ -39,7 +39,7 @@ export async function requestIamportPay({
   return new Promise<void>((resolve, reject) => {
     IMP.request_pay(
       {
-        pg, // 동적 PG사 설정
+        pg, // PG사 동적 설정
         pay_method,
         merchant_uid,
         name,
