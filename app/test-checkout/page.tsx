@@ -7,7 +7,7 @@ import { requestIamportPay } from '@/lib/portone/v1-client';
 
 export default function TestCheckoutPage() {
   const [sdkReady, setSdkReady] = useState(false);
-  const [pgProvider, setPgProvider] = useState<'settle' | 'tosspayments' | 'nice_v2'>('settle');
+  const [pgProvider, setPgProvider] = useState<'tosspayments' | 'nice_v2'>('tosspayments'); // 헥토 제거
   
   useEffect(() => {
     const checkSDK = setInterval(() => {
@@ -56,20 +56,10 @@ export default function TestCheckoutPage() {
       />
       
       <div style={{ padding: '40px', maxWidth: '600px', margin: '0 auto' }}>
-        <h1>PG사 테스트</h1>
+        <h1>PG사 테스트 (헥토파이낸셜 비활성화)</h1>
         
         <div style={{ marginTop: '20px' }}>
           <h3>PG사 선택:</h3>
-          <label>
-            <input 
-              type="radio" 
-              value="settle" 
-              checked={pgProvider === 'settle'}
-              onChange={(e) => setPgProvider(e.target.value as any)}
-            />
-            헥토파이낸셜
-          </label>
-          <br />
           <label>
             <input 
               type="radio" 
@@ -77,7 +67,7 @@ export default function TestCheckoutPage() {
               checked={pgProvider === 'tosspayments'}
               onChange={(e) => setPgProvider(e.target.value as any)}
             />
-            토스페이먼츠
+            토스페이먼츠 (권장)
           </label>
           <br />
           <label>
@@ -108,7 +98,9 @@ export default function TestCheckoutPage() {
         </button>
         
         <div style={{ marginTop: '20px', color: '#666' }}>
-          SDK Ready: {sdkReady ? '✅' : '❌'}
+          SDK Ready: {sdkReady ? '✅' : '❌'}<br />
+          선택된 PG: {pgProvider}<br />
+          헥토파이낸셜: ❌ 비활성화됨
         </div>
       </div>
     </>

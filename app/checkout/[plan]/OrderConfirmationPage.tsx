@@ -19,7 +19,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
   const [sdkReady, setSdkReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'trans'>('card');
-  const [pgProvider, setPgProvider] = useState<'settle' | 'tosspayments' | 'nice_v2'>('settle');
+  const [pgProvider, setPgProvider] = useState<'tosspayments' | 'nice_v2'>('tosspayments'); // 헥토 제거, 토스를 기본값으로
   const [agreements, setAgreements] = useState({
     terms: false,
     privacy: false,
@@ -202,15 +202,11 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                       <div style={{ fontSize: '28px', fontWeight: '700' }}>
                         ₩{pricing.discountPrice.toLocaleString()}
                       </div>
-                      <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>
-                        실제 결제: ₩{pricing.actualPrice.toLocaleString()}
-                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* 나머지 섹션들은 동일... */}
               {/* 2. 주문자 정보 */}
               <div className="inneros-card">
                 <h2 style={{ 
@@ -258,7 +254,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                 </div>
               </div>
 
-              {/* 3. 결제 대행사 선택 */}
+              {/* 3. 결제 대행사 선택 - 헥토파이낸셜 제거 */}
               <div className="inneros-card">
                 <h2 style={{ 
                   fontSize: '20px', 
@@ -270,32 +266,6 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                 </h2>
                 
                 <div style={{ display: 'grid', gap: '12px' }}>
-                  <label style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    padding: '16px',
-                    border: `2px solid ${pgProvider === 'settle' ? 'var(--brand-color)' : 'var(--border-primary)'}`,
-                    borderRadius: '8px',
-                    cursor: 'pointer',
-                    transition: 'var(--transition-base)'
-                  }}>
-                    <input
-                      type="radio"
-                      name="pgProvider"
-                      value="settle"
-                      checked={pgProvider === 'settle'}
-                      onChange={(e) => setPgProvider(e.target.value as any)}
-                      style={{ marginRight: '8px' }}
-                    />
-                    <div>
-                      <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>헥토파이낸셜</div>
-                      <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                        안정적인 결제 서비스
-                      </div>
-                    </div>
-                  </label>
-                  
                   <label style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -317,7 +287,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                     <div>
                       <div style={{ fontWeight: '500', color: 'var(--text-primary)' }}>토스페이먼츠</div>
                       <div style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-                        간편하고 빠른 결제
+                        간편하고 빠른 결제 (권장)
                       </div>
                     </div>
                   </label>
@@ -524,12 +494,15 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                     }}>
                       ₩{pricing.actualPrice.toLocaleString()}
                     </div>
-                    <div style={{ 
-                      fontSize: '14px', 
-                      color: 'var(--text-secondary)'
-                    }}>
-                      표시가격: ₩{pricing.discountPrice.toLocaleString()}
-                    </div>
+                    {pricing.originalPrice !== pricing.discountPrice && (
+                      <div style={{ 
+                        fontSize: '14px', 
+                        color: 'var(--text-secondary)',
+                        textDecoration: 'line-through'
+                      }}>
+                        ₩{pricing.originalPrice.toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 </div>
                 
