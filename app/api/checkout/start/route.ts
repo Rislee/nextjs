@@ -2,6 +2,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import { PLAN_PRICING } from '@/lib/pricing'; // 중앙화된 가격 import
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -9,17 +10,11 @@ export const revalidate = 0;
 
 type PlanId = 'START_OS' | 'SIGNATURE_OS' | 'MASTER_OS';
 
-const PRICE: Record<PlanId, number> = {
-  START_OS: 550000,          
-  SIGNATURE_OS: 2200000,
-  MASTER_OS: 4500000,
-};
-
 export async function POST(req: Request) {
   // 0) 입력 검사
   const body = await req.json().catch(() => ({}));
   const planId = body?.planId as PlanId | undefined;
-  if (!planId || !(planId in PRICE)) {
+  if (!planId || !(planId in PLAN_PRICING)) {
     return NextResponse.json({ ok: false, error: 'invalid_plan' }, { status: 400 });
   }
 
@@ -28,7 +23,7 @@ export async function POST(req: Request) {
   const uid = ck.get('uid')?.value;
   if (!uid) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 });
 
-  // 2) 현재 멤버십 확인 → 동일 플랜이면 차단 (다른 플랜은 허용)
+  // 2) 현재 멤버십 확인
   const m = await supabaseAdmin
     .from('memberships')
     .select('plan_id,status')
@@ -38,7 +33,6 @@ export async function POST(req: Request) {
   const curPlan = (m.data?.plan_id ?? null) as PlanId | null;
   const curStatus = (m.data?.status ?? 'none') as 'active' | 'past_due' | 'canceled' | 'none';
 
-  // 현재 활성 상태에서 동일한 플랜을 구매하려고 하면 차단
   if (curStatus === 'active' && curPlan === planId) {
     return NextResponse.json(
       { ok: false, error: 'already_active_same_plan', detail: { current: curPlan } },
@@ -46,8 +40,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3) 주문 생성
-  const amount = PRICE[planId];
+  // 3) 주문 생성 - 중앙화된 가격 사용
+  const amount = PLAN_PRICING[planId].actualPrice; // 실제 결제 금액
   const orderName = `InnerOS ${planId.replace('_', ' ')}`;
   const merchantUid = `inneros_${planId}_${Date.now()}`;
 
@@ -70,6 +64,13 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
+
+  console.log('Order created:', { 
+    planId, 
+    displayPrice: PLAN_PRICING[planId].discountPrice,
+    actualPrice: amount,
+    merchantUid 
+  });
 
   return NextResponse.json({ ok: true, merchantUid, amount, orderName }, { status: 200 });
 }

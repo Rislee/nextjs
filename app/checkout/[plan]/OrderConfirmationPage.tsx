@@ -6,33 +6,13 @@ import { useRouter } from 'next/navigation';
 import Script from 'next/script';
 import { requestIamportPay } from '@/lib/portone/v1-client';
 import type { PlanId } from '@/lib/plan';
+import { PLAN_PRICING, PLAN_INFO } from '@/lib/pricing'; // 중앙화된 가격 정보 import
 
 interface OrderConfirmationPageProps {
   planId: PlanId;
   userEmail: string;
   userName: string;
 }
-
-const PLAN_INFO = {
-  START_OS: {
-    title: 'START OS',
-    originalPrice: 69000,
-    discountPrice: 55000,
-    description: '기본 AI 어시스턴트 서비스'
-  },
-  SIGNATURE_OS: {
-    title: 'SIGNATURE OS',
-    originalPrice: 290000,
-    discountPrice: 250000,
-    description: '프리미엄 AI 어시스턴트 서비스'
-  },
-  MASTER_OS: {
-    title: 'MASTER OS',
-    originalPrice: 600000,
-    discountPrice: 500000,
-    description: '최고급 AI 어시스턴트 서비스'
-  }
-};
 
 export default function OrderConfirmationPage({ planId, userEmail, userName }: OrderConfirmationPageProps) {
   const router = useRouter();
@@ -51,6 +31,8 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
     phone: ''
   });
 
+  // 가격 정보 가져오기
+  const pricing = PLAN_PRICING[planId];
   const planInfo = PLAN_INFO[planId];
 
   // SDK 로드 체크
@@ -126,20 +108,27 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
       }
 
       const { merchantUid, amount, orderName } = await orderResponse.json();
+      
+      // 실제 결제 금액 확인
+      console.log('결제 정보:', {
+        표시가격: pricing.discountPrice,
+        실제결제금액: amount,
+        주문명: orderName
+      });
 
       const redirectUrl = `${window.location.origin}/checkout/complete`;
 
-      // 결제창 호출 - PG사 파라미터 추가
+      // 결제창 호출
       await requestIamportPay({
         merchant_uid: merchantUid,
-        amount,
+        amount, // API에서 받은 실제 결제 금액 사용
         name: orderName,
         redirectUrl,
         buyer_name: formData.name,
         buyer_email: formData.email,
         buyer_tel: formData.phone || undefined,
         pay_method: paymentMethod,
-        pg: pgProvider // PG사 전달
+        pg: pgProvider
       });
 
     } catch (error: any) {
@@ -180,7 +169,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
             </div>
 
             <div style={{ display: 'grid', gap: '32px' }}>
-              {/* 1. 구매 상품 정보 */}
+              {/* 1. 구매 상품 정보 - 가격 동기화 */}
               <div className="inneros-card">
                 <h2 style={{ 
                   fontSize: '20px', 
@@ -208,16 +197,20 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '18px', textDecoration: 'line-through', opacity: 0.7 }}>
-                        ₩{planInfo.originalPrice.toLocaleString()}
+                        ₩{pricing.originalPrice.toLocaleString()}
                       </div>
                       <div style={{ fontSize: '28px', fontWeight: '700' }}>
-                        ₩{planInfo.discountPrice.toLocaleString()}
+                        ₩{pricing.discountPrice.toLocaleString()}
+                      </div>
+                      <div style={{ fontSize: '12px', opacity: 0.8, marginTop: '4px' }}>
+                        실제 결제: ₩{pricing.actualPrice.toLocaleString()}
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
+              {/* 나머지 섹션들은 동일... */}
               {/* 2. 주문자 정보 */}
               <div className="inneros-card">
                 <h2 style={{ 
@@ -507,7 +500,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                 </div>
               </div>
 
-              {/* 결제 요약 및 버튼 */}
+              {/* 결제 요약 및 버튼 - 가격 동기화 */}
               <div className="inneros-card" style={{ background: 'var(--bg-secondary)' }}>
                 <div style={{ 
                   display: 'flex', 
@@ -529,14 +522,13 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                       fontWeight: '700', 
                       color: 'var(--text-primary)' 
                     }}>
-                      ₩{planInfo.discountPrice.toLocaleString()}
+                      ₩{pricing.actualPrice.toLocaleString()}
                     </div>
                     <div style={{ 
                       fontSize: '14px', 
-                      color: 'var(--text-secondary)',
-                      textDecoration: 'line-through' 
+                      color: 'var(--text-secondary)'
                     }}>
-                      ₩{planInfo.originalPrice.toLocaleString()}
+                      표시가격: ₩{pricing.discountPrice.toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -556,7 +548,7 @@ export default function OrderConfirmationPage({ planId, userEmail, userName }: O
                     style={{ flex: 2 }}
                     disabled={loading || !agreements.terms || !agreements.privacy}
                   >
-                    {loading ? '결제 진행 중...' : `₩${planInfo.discountPrice.toLocaleString()} 결제하기`}
+                    {loading ? '결제 진행 중...' : `₩${pricing.actualPrice.toLocaleString()} 결제하기`}
                   </button>
                 </div>
               </div>
